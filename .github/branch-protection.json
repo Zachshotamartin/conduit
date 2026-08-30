@@ -1,0 +1,31 @@
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": [
+      "pr / lint",
+      "pr / vet",
+      "pr / arch-check",
+      "pr / unit-race",
+      "pr / proto-race",
+      "pr / authz-race",
+      "pr / index-race",
+      "pr / docs-status-lint",
+      "pr / metrics-contract",
+      "pr / deps-audit",
+      "pr / trace-check",
+      "integration / conformance-node",
+      "integration / integration-nats",
+      "integration / integration-postgres",
+      "integration / socket-hostile"
+    ]
+  },
+  "enforce_admins": true,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 1,
+    "dismiss_stale_reviews": true
+  },
+  "required_linear_history": true,
+  "allow_force_pushes": false,
+  "allow_deletions": false,
+  "restrictions": null
+}
