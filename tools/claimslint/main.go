@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,8 +12,9 @@ import (
 )
 
 var (
-	claimMarker = regexp.MustCompile(`<!--\s*claim:(R[0-9]+)\s*-->`)
-	claimID     = regexp.MustCompile(`^C[0-9]+$`)
+	claimMarker  = regexp.MustCompile(`<!--\s*claim:(R[0-9]+)\s*-->`)
+	claimID      = regexp.MustCompile(`^C[0-9]+$`)
+	evidenceLink = regexp.MustCompile(`^\[[^]]+\]\([^)]+\)$`)
 )
 
 type violation struct {
@@ -41,8 +43,11 @@ func lintClaims(root string) ([]violation, error) {
 		}
 	}
 
-	for _, relativePath := range []string{"README.md", filepath.Join("docs", "MARKETING_PLAN.md")} {
-		path := filepath.Join(root, relativePath)
+	claimPaths, err := claimAssetPaths(root)
+	if err != nil {
+		return nil, err
+	}
+	for _, path := range claimPaths {
 		content, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return nil, readErr
@@ -64,6 +69,50 @@ func lintClaims(root string) ([]violation, error) {
 		return violations[i].Path < violations[j].Path
 	})
 	return violations, nil
+}
+
+func claimAssetPaths(root string) ([]string, error) {
+	paths := make(map[string]bool)
+	for _, name := range []string{"README.md", "CHANGELOG.md", "RELEASE_NOTES.md"} {
+		path := filepath.Join(root, name)
+		info, err := os.Stat(path)
+		if err == nil && info.Mode().IsRegular() {
+			paths[path] = true
+			continue
+		}
+		if err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+
+	for _, directory := range []string{"docs", "marketing"} {
+		base := filepath.Join(root, directory)
+		if _, err := os.Stat(base); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		if err := filepath.WalkDir(base, func(path string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() || !strings.EqualFold(filepath.Ext(path), ".md") {
+				return nil
+			}
+			paths[path] = true
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	ordered := make([]string, 0, len(paths))
+	for path := range paths {
+		ordered = append(ordered, path)
+	}
+	sort.Strings(ordered)
+	return ordered, nil
 }
 
 func loadGateStatuses(root string) (map[string]string, string, error) {
@@ -133,17 +182,48 @@ func lintMarkers(path, content string, statuses map[string]string) []violation {
 
 func lintClaimsRegister(path, content string, statuses map[string]string) []violation {
 	var violations []violation
-	for index, line := range strings.Split(content, "\n") {
-		columns := strings.Split(line, "|")
-		if len(columns) < 7 {
+	lines := strings.Split(content, "\n")
+	headerLine := 0
+	for index, line := range lines {
+		columns := markdownCells(line)
+		if len(columns) != 0 && columns[0] == "#" {
+			headerLine = index + 1
+			want := []string{"#", "Claim (exact public sentence)", "Ladder level", "Gate", "Status", "Evidence"}
+			if !equalStrings(columns, want) {
+				return []violation{{
+					Path: path, Line: headerLine,
+					Message: "claims register header must be: # | Claim (exact public sentence) | Ladder level | Gate | Status | Evidence",
+				}}
+			}
+			break
+		}
+	}
+	if headerLine == 0 {
+		return []violation{{Path: path, Line: 1, Message: "claims register is missing the required Evidence column header"}}
+	}
+
+	seen := make(map[string]bool)
+	for index, line := range lines {
+		columns := markdownCells(line)
+		if len(columns) == 0 {
 			continue
 		}
-		currentClaimID := strings.TrimSpace(columns[1])
+		currentClaimID := columns[0]
 		if !claimID.MatchString(currentClaimID) {
 			continue
 		}
-		gate := strings.TrimSpace(columns[len(columns)-3])
-		claimStatus := strings.TrimSpace(columns[len(columns)-2])
+		if seen[currentClaimID] {
+			violations = append(violations, violation{Path: path, Line: index + 1, Message: fmt.Sprintf("claim %s is duplicated", currentClaimID)})
+			continue
+		}
+		seen[currentClaimID] = true
+		if len(columns) != 6 {
+			violations = append(violations, violation{Path: path, Line: index + 1, Message: fmt.Sprintf("claim %s must have exactly six columns including Evidence", currentClaimID)})
+			continue
+		}
+		gate := columns[3]
+		claimStatus := columns[4]
+		evidence := columns[5]
 		gateStatus, exists := statuses[gate]
 		if !exists {
 			violations = append(violations, violation{
@@ -164,8 +244,44 @@ func lintClaimsRegister(path, content string, statuses map[string]string) []viol
 				Message: fmt.Sprintf("claim %s status is %q, want %q while %s is %q", currentClaimID, claimStatus, want, gate, gateStatus),
 			})
 		}
+		if claimStatus == "unearned" && evidence != "—" {
+			violations = append(violations, violation{
+				Path: path, Line: index + 1,
+				Message: fmt.Sprintf("claim %s is unearned and must use — in Evidence", currentClaimID),
+			})
+		}
+		if claimStatus == "earned" && !evidenceLink.MatchString(evidence) {
+			violations = append(violations, violation{
+				Path: path, Line: index + 1,
+				Message: fmt.Sprintf("claim %s is earned and must carry a Markdown evidence link", currentClaimID),
+			})
+		}
 	}
 	return violations
+}
+
+func markdownCells(line string) []string {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "|") || !strings.HasSuffix(trimmed, "|") {
+		return nil
+	}
+	parts := strings.Split(strings.Trim(trimmed, "|"), "|")
+	for index := range parts {
+		parts[index] = strings.TrimSpace(parts[index])
+	}
+	return parts
+}
+
+func equalStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func main() {

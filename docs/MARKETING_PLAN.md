@@ -63,19 +63,19 @@ is `unearned` until the named gate is accepted, then `earned` with an
 evidence link. The lint fails any asset carrying a claim marker whose
 row is `unearned`.
 
-| # | Claim (exact public sentence) | Ladder level | Gate | Status |
-| --- | --- | --- | --- | --- |
-| C1 | Conduit executes GraphQL queries and mutations against PostgreSQL, HTTP, and function sources with enforced depth and complexity limits (single node, development auth only). | L1 | R1 | unearned |
-| C2 | Conduit implements `graphql-transport-ws`, proven by a conformance suite against the unmodified reference client. | L1 | R2 | unearned |
-| C3 | Conduit enforces authorization at subscribe time and at every publish, with tested revocation and expiry mid-subscription. | L1 | R3 | unearned |
-| C4 | Conduit's filter index is sublinear and benchmarked ≥10× over linear scan at 100,000 subscriptions (microbenchmark, single process). | L0 | R4 | unearned |
-| C5 | Conduit fans out across nodes with tested node-loss and partition behavior; revocation propagates fleet-wide with measured p99 ≤ 2 s on the reference 3-node fixture. | L3 (fixture-scoped) | R5 | unearned |
-| C6 | Conduit's per-field backpressure policies and quotas hold under adversarial load with bounded memory (CI-scale evidence). | L1 | R6 | unearned |
-| C7 | Conduit resumes subscriptions across reconnects with bounded replay and an honest, measured gap window (published horizon curves). | L2 | R7 | unearned |
-| C8 | Conduit is operable: documented metrics catalogue, sampled tracing, paced drain, and a rehearsed runbook. | L2 | R8 | unearned |
-| C9 | Conduit sustains 50,000 concurrent WebSocket connections on a single benchmarked node with ≤ 64 KiB idle memory per connection and publish-to-delivery p95 ≤ 50 ms on the reference workload. | L2 | R9 | unearned |
-| C10 | A three-node Conduit fleet delivers ≥ 2.5× single-node throughput on the reference workload, bus overhead published. | L3 | R9 | unearned |
-| C11 | Conduit 1.0 ships reproducible, signed artifacts with SBOM and provenance, a tested Kubernetes rollout with a stated loss contract, and a real example application. | L4 | R10 | unearned |
+| # | Claim (exact public sentence) | Ladder level | Gate | Status | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| C1 | Conduit executes GraphQL queries and mutations against PostgreSQL, HTTP, and function sources with enforced depth and complexity limits (single node, development auth only). | L1 | R1 | unearned | — |
+| C2 | Conduit implements `graphql-transport-ws`, proven by a conformance suite against the unmodified reference client. | L1 | R2 | unearned | — |
+| C3 | Conduit enforces authorization at subscribe time and at every publish, with tested revocation and expiry mid-subscription. | L1 | R3 | unearned | — |
+| C4 | Conduit's filter index is sublinear and benchmarked ≥10× over linear scan at 100,000 subscriptions (microbenchmark, single process). | L0 | R4 | unearned | — |
+| C5 | Conduit fans out across nodes with tested node-loss and partition behavior; revocation propagates fleet-wide with measured p99 ≤ 2 s on the reference 3-node fixture. | L3 (fixture-scoped) | R5 | unearned | — |
+| C6 | Conduit's per-field backpressure policies and quotas hold under adversarial load with bounded memory (CI-scale evidence). | L1 | R6 | unearned | — |
+| C7 | Conduit resumes subscriptions across reconnects with bounded replay and an honest, measured gap window (published horizon curves). | L2 | R7 | unearned | — |
+| C8 | Conduit is operable: documented metrics catalogue, sampled tracing, paced drain, and a rehearsed runbook. | L2 | R8 | unearned | — |
+| C9 | Conduit sustains 50,000 concurrent WebSocket connections on a single benchmarked node with ≤ 64 KiB idle memory per connection and publish-to-delivery p95 ≤ 50 ms on the reference workload. | L2 | R9 | unearned | — |
+| C10 | A three-node Conduit fleet delivers ≥ 2.5× single-node throughput on the reference workload, bus overhead published. | L3 | R9 | unearned | — |
+| C11 | Conduit 1.0 ships reproducible, signed artifacts with SBOM and provenance, a tested Kubernetes rollout with a stated loss contract, and a real example application. | L4 | R10 | unearned | — |
 
 Register maintenance rules: a gate's acceptance PR updates its rows in
 the same change (BUILD_PLAN §18.1); numbers in C9/C10 are replaced by
