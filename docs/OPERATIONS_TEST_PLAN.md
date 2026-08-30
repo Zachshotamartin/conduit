@@ -25,7 +25,7 @@ Companion sources of truth:
   statistical treatment, and the claims ladder for every number in §12.
 - [Glossary](GLOSSARY.md) — controlled terms; this document uses them with
   those meanings and no others.
-- ADR-0001 through ADR-0011 in [decisions/](decisions/) — binding decisions
+- ADR-0001 through ADR-0012 in [decisions/](decisions/) — binding decisions
   this plan operationalizes.
 
 ## 1. Operating Model and Lifecycle Invariants
@@ -126,7 +126,7 @@ tags; the R0 architecture check fails any other package containing
 
 | Component | Pinned or supported range | Enforcement |
 | --- | --- | --- |
-| Go toolchain | 1.23.x, exact patch pinned by the `toolchain` directive in `go.mod` | CI fails if `go version` differs from the pin; ADR-0001 |
+| Go toolchain | 1.26.7, with Go 1.23.0 language semantics retained by the `go` directive | `make bootstrap`, every supported Go-using Make entrypoint, and CI force/select 1.26.7 and fail if `go version` differs; ADR-0012 |
 | NATS server | 2.10.x through 2.11.x; container suites pin one exact digest per range endpoint | Nightly `nats-matrix` job runs both endpoints (§11.4) |
 | nats.go client | Exact version pinned in `go.mod` | Dependency review gate §5 |
 | PostgreSQL (relational source, FR-GQL-004) | 14, 15, 16; container suites pin exact digests | `integration-postgres` job runs 14 and 16; 15 nightly |
@@ -135,7 +135,7 @@ tags; the R0 architecture check fails any other package containing
 | Kubernetes (deploy tests) | 1.29 through 1.31 via kind; manifests validated against all three | R10 cluster suite |
 | kind | 0.23 or later | Cluster harness bootstrap check |
 | Container runtime | Docker Engine 24+ or Podman 4.9+ | `make integration` preflight |
-| syft / cosign / benchstat / staticcheck / golangci-lint / govulncheck | Exact versions pinned in `Makefile` tool block | `make bootstrap` installs the pins; CI verifies versions |
+| syft / cosign / benchstat / staticcheck / golangci-lint / govulncheck | Exact versions pinned in `scripts/bootstrap.sh` | `make bootstrap` installs and verifies the pins; CI invokes the same bootstrap contract or an exact CI-contract-checked install command |
 
 ### 2.3 Developer-machine expectations
 
@@ -246,9 +246,14 @@ From a clean Tier 1 or Tier 2 machine to green tests:
 
 1. Install Git 2.40+ and the `gh` CLI 2.40+ via the platform package
    manager, then authenticate: `gh auth login --scopes repo,workflow`.
-2. Install any Go 1.21+ bootstrap toolchain (`brew install go` or the
-   linux tarball); the `toolchain` directive in `go.mod` makes `go`
-   download and use the exact pinned 1.23.x automatically. Verify:
+2. Install a Go 1.21 or newer launcher, which supports Go's toolchain
+   selection mechanism. The `toolchain go1.26.7` directive in `go.mod`
+   records the preferred toolchain, but that preference is not the
+   repository's enforcement boundary. The Makefile and
+   `scripts/bootstrap.sh` force `GOTOOLCHAIN=go1.26.7` for supported
+   entrypoints, downloading that toolchain when the launcher's normal
+   download policy permits, and explicitly reject a selected version other
+   than Go 1.26.7. CI installs that exact version directly. Verify:
 
    ```sh
    go version
@@ -267,12 +272,15 @@ From a clean Tier 1 or Tier 2 machine to green tests:
    make bootstrap
    ```
 
-   `make bootstrap` performs exactly: `go mod download` against the vendored
-   module set; installation of the pinned versions of `staticcheck`,
-   `golangci-lint`, `govulncheck`, `benchstat`, `syft`, and `cosign` into
-   `./bin`; verification that each installed tool reports its pinned
-   version; and a preflight report of Docker/Podman availability and the
-   file-descriptor limit. It writes nothing outside the repository and
+   `make bootstrap` performs exactly: `go mod download` for the module graph
+   declared by `go.mod`, verified with checksums from `go.sum`; installation
+   of the pinned versions of `staticcheck`, `golangci-lint`, `govulncheck`,
+   `benchstat`, `syft`, and `cosign` into `./bin`; verification that each
+   installed tool reports its pinned version and compiler version; and a
+   preflight report of Docker/Podman availability and the file-descriptor
+   limit. It can write the repository-local `./bin` directory, the module
+   cache reported by `go env GOMODCACHE`, and the build cache reported by
+   `go env GOCACHE`; on a default Go installation the module cache is beneath
    `$GOPATH`.
 5. Run the deterministic suites (no containers, no network):
 

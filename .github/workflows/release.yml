@@ -19,7 +19,7 @@ jobs:
       - name: Set up pinned Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - name: Run current command package tests
@@ -42,7 +42,7 @@ jobs:
       - name: Set up pinned Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - name: Run current release metadata package tests
@@ -57,7 +57,7 @@ jobs:
       - name: Set up pinned Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - name: Run current compatibility fixture packages
@@ -72,7 +72,7 @@ jobs:
       - name: Set up pinned Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - name: Run current packaging package tests before R10 image construction
@@ -87,7 +87,7 @@ jobs:
       - name: Set up pinned Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - name: Run current install-facing conformance packages before R10 manifests

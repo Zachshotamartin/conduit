@@ -73,11 +73,11 @@ Read these documents first and in this order:
 
 - [Decision record directory](decisions/) contains accepted and proposed ADRs.
 - [ADR template](decisions/TEMPLATE.md) defines the required record structure.
-- The initial binding decisions are ADR-0001 through ADR-0011: language and
+- The initial binding decisions are ADR-0001 through ADR-0012: language and
   runtime, protocol support, execution approach, bus selection,
   connection-state ownership, predicate index structure, delivery guarantee,
   token refresh and revocation, multi-tenancy isolation, observability stack,
-  and supported platforms.
+  supported platforms, and the security-supported toolchain pin.
 - A reversal of any accepted decision requires a new ADR that supersedes the
   old one. Silent edits to an earlier decision are forbidden.
 

@@ -19,13 +19,13 @@ jobs:
       - name: Set up pinned Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - name: Run current parser and token-owning package tests
         run: go test -mod=vendor -race ./internal/protocol/... ./internal/graphql/... ./internal/resume/...
       - name: Install pinned vulnerability scanner
-        run: "go install golang.org/x/vuln/cmd/govulncheck@v1.1.4"
+        run: "go install golang.org/x/vuln/cmd/govulncheck@v1.7.0"
       - name: Run pinned vulnerability scanner
         env:
           GOFLAGS: -mod=vendor
@@ -48,7 +48,7 @@ jobs:
       - name: Set up pinned Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - name: Run current queue and fanout package tests
@@ -71,7 +71,7 @@ jobs:
       - name: Set up pinned Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - name: Run current memory-bus and fault-fixture package tests
@@ -94,7 +94,7 @@ jobs:
       - name: Set up pinned Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - name: Run current NATS adapter package tests
@@ -109,7 +109,7 @@ jobs:
       - name: Set up pinned Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - name: Run all currently registered benchmarks
@@ -124,7 +124,7 @@ jobs:
       - name: Set up pinned Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - name: Run current filter package tests with the race detector

@@ -46,13 +46,13 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintf(stderr, "cicontract: unexpected arguments: %v\n", flags.Args())
+		_, _ = fmt.Fprintf(stderr, "cicontract: unexpected arguments: %v\n", flags.Args())
 		return 2
 	}
 
 	report, err := Check(*root)
 	if err != nil {
-		fmt.Fprintf(stderr, "cicontract: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "cicontract: %v\n", err)
 		return 2
 	}
 	for _, finding := range report.Findings {
@@ -60,13 +60,13 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		if finding.Path != "" {
 			location += ":" + finding.Path
 		}
-		fmt.Fprintf(stderr, "%s: %s: %s\n", finding.Code, location, finding.Message)
+		_, _ = fmt.Fprintf(stderr, "%s: %s: %s\n", finding.Code, location, finding.Message)
 	}
 	if len(report.Findings) != 0 {
 		return 1
 	}
 
-	fmt.Fprintf(stdout, "cicontract: %d protected contexts verified\n", len(report.Contexts))
+	_, _ = fmt.Fprintf(stdout, "cicontract: %d protected contexts verified\n", len(report.Contexts))
 	return 0
 }
 
@@ -125,7 +125,8 @@ const (
 	checkoutActionUse       = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262"
 	setupGoActionUse        = "actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff"
 	uploadArtifactActionUse = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
-	govulncheckInstall      = "go install golang.org/x/vuln/cmd/govulncheck@v1.1.4"
+	goToolchainVersion      = "1.26.7"
+	govulncheckInstall      = "go install golang.org/x/vuln/cmd/govulncheck@v1.7.0"
 	govulncheckRun          = `"$(go env GOPATH)/bin/govulncheck" ./...`
 )
 
@@ -186,9 +187,9 @@ var exactJobRunCommands = map[string]map[string][]string{
 		"lint": {
 			"GO=go ./scripts/check-format.sh",
 			"./scripts/check-determinism.sh",
-			"go install honnef.co/go/tools/cmd/staticcheck@v0.5.1",
+			"go install honnef.co/go/tools/cmd/staticcheck@v0.8.1",
 			`"$(go env GOPATH)/bin/staticcheck" ./...`,
-			"go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2",
+			"go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2",
 			`"$(go env GOPATH)/bin/golangci-lint" run`,
 			"go run -mod=vendor ./tools/claimslint .",
 			"go run -mod=vendor ./tools/cicontract -root .",
@@ -263,6 +264,7 @@ func Check(root string) (Report, error) {
 	}
 
 	validateProtectionPolicy(&report, protection)
+	validateToolchainPolicy(&report, root)
 	validateTriggers(&report, workflows)
 	validateExactRunInventories(&report, workflows)
 	validateRaceJobs(&report, workflows["pr"])
@@ -448,12 +450,12 @@ func validateJobBootstrap(report *Report, file, jobName string, job *workflowJob
 		}
 		setupGoCount++
 		want := map[string]string{
-			"go-version":   "1.23.12",
+			"go-version":   goToolchainVersion,
 			"check-latest": "false",
 			"cache":        "false",
 		}
 		if !equalStringMap(step.With, want) {
-			report.add("job.bootstrap", file, stepPath+".with", "setup-go configuration must be exactly go-version=1.23.12, check-latest=false, cache=false")
+			report.add("job.bootstrap", file, stepPath+".with", fmt.Sprintf("setup-go configuration must be exactly go-version=%s, check-latest=false, cache=false", goToolchainVersion))
 		}
 	}
 	if len(job.Steps) == 0 || job.Steps[0].Uses != checkoutActionUse {
@@ -1167,7 +1169,7 @@ func readYAMLLines(path string) ([]yamlLine, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var lines []yamlLine
 	scanner := bufio.NewScanner(file)

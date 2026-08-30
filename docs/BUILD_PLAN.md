@@ -435,7 +435,7 @@ before the harness that would prove it exists.
   `workflow` scopes (`gh auth status` exits zero and lists both). This is
   the first verified step of the entire plan and is already satisfied on the
   authoring machine (account `Zachshotamartin`).
-- ADR-0001 through ADR-0011 are accepted.
+- ADR-0001 through ADR-0012 are accepted.
 - This documentation set is complete and internally consistent.
 
 ### 5.3 Owned files, interfaces, and state
@@ -473,7 +473,8 @@ Bootstrap order (numbered, each step verifiable):
 2. `gh repo create <owner>/conduit --private --clone` (public at R10's
    publication audit, not before); default branch `main`.
 3. Commit this documentation set as the first commit.
-4. Add toolchain pin (`go 1.23.x` exact), empty module, `Makefile`,
+4. Add the exact Go 1.26.7 toolchain pin while retaining the Go 1.23.0
+   language directive (ADR-0012), empty module, `Makefile`,
    workflow skeletons; second commit.
 5. Branch protection via `gh api`: require the `pr.yml` checks, forbid
    force-push, require one review.

@@ -63,39 +63,6 @@ install_tool() {
     printf '%s compiler build version is %s, require %s\n' "$binary_name" "$installed_compiler_version" "$required_go_version" >&2
     exit 1
   fi
-  printf 'verified %s (%s@%s, built with %s)\n' "$binary_name" "$module_path" "$module_version" "$installed_compiler_version"
-}
-
-report_container_runtime() {
-  if command -v docker >/dev/null 2>&1; then
-    printf 'container runtime: %s\n' "$(docker --version)"
-    return
-  fi
-  if command -v podman >/dev/null 2>&1; then
-    printf 'container runtime: %s\n' "$(podman --version)"
-    return
-  fi
-  printf '%s\n' 'container runtime: unavailable (required only for conformance and integration suites)'
-}
-
-report_file_limit() {
-  descriptor_limit="$(ulimit -n)"
-  printf 'file descriptor soft limit: %s' "$descriptor_limit"
-  case "$descriptor_limit" in
-    unlimited)
-      printf '%s\n' ' (meets socket-harness prerequisite)'
-      ;;
-    *[!0-9]*|'')
-      printf '%s\n' ' (could not evaluate numeric socket-harness prerequisite)'
-      ;;
-    *)
-      if [ "$descriptor_limit" -ge 8192 ]; then
-        printf '%s\n' ' (meets socket-harness prerequisite)'
-      else
-        printf '%s\n' ' (below 8192; deterministic suites remain available)'
-      fi
-      ;;
-  esac
 }
 
 require_go_version
@@ -107,5 +74,3 @@ install_tool govulncheck golang.org/x/vuln/cmd/govulncheck golang.org/x/vuln "$g
 install_tool benchstat golang.org/x/perf/cmd/benchstat golang.org/x/perf "$benchstat_version"
 install_tool syft github.com/anchore/syft/cmd/syft github.com/anchore/syft "$syft_version"
 install_tool cosign github.com/sigstore/cosign/v2/cmd/cosign github.com/sigstore/cosign/v2 "$cosign_version"
-report_container_runtime
-report_file_limit

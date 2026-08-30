@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - run: go test -mod=vendor -race ./test/conformance/... ./internal/protocol/...
@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - run: go test -mod=vendor -race ./internal/bus/nats/... ./test/fault/...
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - run: go test -mod=vendor -race ./internal/datasource/postgres/...
@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
-          go-version: "1.23.12"
+          go-version: "1.26.7"
           check-latest: false
           cache: false
       - run: go test -mod=vendor -race ./test/hostile/... ./internal/transport/...

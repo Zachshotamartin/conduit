@@ -104,7 +104,7 @@ are specified in
 | [docs/MARKETING_PLAN.md](docs/MARKETING_PLAN.md) | Positioning, claims register, launch assets — gated like everything else |
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | Controlled definitions |
 | [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) | Deferred decisions with fail-closed defaults and reopen triggers |
-| [docs/decisions/](docs/decisions/) | ADR-0001…0011: language, protocol, executor, bus, state ownership, index, delivery contract, refresh/revocation, tenancy, observability, platforms |
+| [docs/decisions/](docs/decisions/) | ADR-0001…0012: language, protocol, executor, bus, state ownership, index, delivery contract, refresh/revocation, tenancy, observability, platforms, security-supported toolchain |
 
 ## License and status of claims
 
