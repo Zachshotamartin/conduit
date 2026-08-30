@@ -816,7 +816,7 @@ PROTOCOL_CONFORMANCE §6.
   documented meaning; unknown-error paths are counted and alarmed.
 - `NFR-MAINT-004`: Documentation status discipline: current-versus-planned
   is updated in the same change as the behavior; CI includes a doc-status
-  lint for forbidden phrases ("TODO", "coming soon") outside
+  lint for the configured placeholder marker and premature-delivery phrase outside
   OPEN_QUESTIONS.
 - `NFR-MAINT-005`: The dependency budget is explicit: runtime dependencies
   are enumerable in one screen (WebSocket, gqlparser, NATS client, pgx,

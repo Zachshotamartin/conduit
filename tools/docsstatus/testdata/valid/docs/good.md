@@ -2,4 +2,4 @@
 
 Document status: planned.
 
-The lint rejects `TODO` and "coming soon" as meta-language examples.
+The lint rejects every configured placeholder phrase, including quoted text.

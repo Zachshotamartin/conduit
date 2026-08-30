@@ -13,7 +13,7 @@ import (
 
 var (
 	forbiddenDocumentationPhrase = regexp.MustCompile(`(?i)\b(?:TODO|coming\s+soon)\b`)
-	statusDeclaration            = regexp.MustCompile(`(?i)\bstatus\b[^\n]*(?:accepted|in progress|planned|deferred|normative)`)
+	statusDeclaration            = regexp.MustCompile(`(?im)^(?:[[:space:]]*-[[:space:]]*)?(?:Document status|Status(?: of every deliverable in this document)?|Review status):[^\n]*(?:accepted|in progress|planned|deferred|normative)[^\n]*$`)
 )
 
 type violation struct {
@@ -35,10 +35,6 @@ func lintDocs(root string) ([]violation, error) {
 		if entry.IsDir() || !strings.EqualFold(filepath.Ext(path), ".md") {
 			return nil
 		}
-		if strings.EqualFold(entry.Name(), "TEMPLATE.md") {
-			return nil
-		}
-
 		fileViolations, err := lintDocument(path, strings.EqualFold(entry.Name(), "OPEN_QUESTIONS.md"))
 		if err != nil {
 			return err
@@ -86,8 +82,7 @@ func lintDocument(path string, allowDeferredLanguage bool) ([]violation, error) 
 		if inFence || allowDeferredLanguage {
 			continue
 		}
-		visible := removeQuotedMetaLanguage(line)
-		if match := forbiddenDocumentationPhrase.FindString(visible); match != "" {
+		if match := forbiddenDocumentationPhrase.FindString(line); match != "" {
 			violations = append(violations, violation{
 				Path:    path,
 				Line:    lineNumber,
@@ -106,37 +101,6 @@ func lintDocument(path string, allowDeferredLanguage bool) ([]violation, error) 
 		})
 	}
 	return violations, nil
-}
-
-func removeQuotedMetaLanguage(line string) string {
-	var out strings.Builder
-	var delimiter rune
-	escaped := false
-	for _, current := range line {
-		if escaped {
-			escaped = false
-			if delimiter == 0 {
-				out.WriteRune(current)
-			}
-			continue
-		}
-		if current == '\\' {
-			escaped = true
-			continue
-		}
-		if delimiter != 0 {
-			if current == delimiter {
-				delimiter = 0
-			}
-			continue
-		}
-		if current == '`' || current == '"' {
-			delimiter = current
-			continue
-		}
-		out.WriteRune(current)
-	}
-	return out.String()
 }
 
 func main() {

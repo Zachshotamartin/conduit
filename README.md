@@ -1,17 +1,17 @@
 # Conduit
 
-A self-hosted GraphQL gateway built around the subscription path: clients
-subscribe over WebSocket (`graphql-transport-ws`) with per-subscription
-filters, mutations publish, and the gateway fans out to every matching
-connection across a horizontally scaled fleet — with authorization
-re-evaluated at publish time and an explicit, measured backpressure policy.
+Conduit is an in-progress implementation of a self-hosted GraphQL gateway
+specified around the subscription path: filtered `graphql-transport-ws`
+subscriptions, mutation-driven publish, cross-node fanout, publish-time
+authorization, bounded backpressure, and honest resume semantics.
 
 ## Implementation status — read this first
 
-**Nothing is built.** This repository currently contains a complete,
-normative planning documentation set and no product code. Every capability
-described anywhere in this repository is `planned`. The honest claim, in
-full:
+**No product capability is built.** Gate R0 repository infrastructure is
+`in progress` on a working branch: the toolchain, deterministic test
+foundations, checks, and workflow contracts exist, but no gateway listener
+or GraphQL behavior exists and no gate has been accepted. The honest product
+claim remains:
 
 > Conduit is a fully specified, unimplemented design for a
 > subscription-first GraphQL gateway. Nothing runs. No performance, scale,
@@ -19,8 +19,8 @@ full:
 
 The build is gated R0–R10; a capability may be claimed only when its gate's
 automated evidence passes. The gate table and the current status of every
-gate live in [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) §1.2 (all gates:
-`planned`).
+gate live in [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) §1.2 (R0:
+`in progress`; R1–R10: `planned`).
 
 ## What Conduit will be, when its gates pass
 
@@ -62,10 +62,19 @@ gate live in [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) §1.2 (all gates:
 
 ## Quick start
 
-There is no runnable quick start yet. When R1 lands, this section becomes
-the 15-minute walkthrough specified in
-[docs/PRODUCT_REQUIREMENTS.md](docs/PRODUCT_REQUIREMENTS.md) §6.1. For
-now, the way to evaluate Conduit is to read the plan:
+There is no product quick start yet. When R1 is accepted, this section
+becomes the 15-minute walkthrough specified in
+[docs/PRODUCT_REQUIREMENTS.md](docs/PRODUCT_REQUIREMENTS.md) §6.1. The R0
+contributor harness is executable now:
+
+```sh
+make check-gh
+make bootstrap
+make check
+make test
+```
+
+The normative evaluation path remains:
 
 1. [docs/README.md](docs/README.md) — documentation index, reading order,
    and the conflict-and-status rules that keep this repository honest.
@@ -75,9 +84,9 @@ now, the way to evaluate Conduit is to read the plan:
    implementation plan, test-first tickets, and the requirement-to-evidence
    traceability matrix.
 
-Contributor bootstrap (toolchain, test commands, CI) is specified in
-[docs/OPERATIONS_TEST_PLAN.md](docs/OPERATIONS_TEST_PLAN.md) §4 and
-becomes executable at gate R0.
+Contributor bootstrap, tool versions, test commands, and CI expectations
+are specified in
+[docs/OPERATIONS_TEST_PLAN.md](docs/OPERATIONS_TEST_PLAN.md) §4.
 
 ## Documentation set
 

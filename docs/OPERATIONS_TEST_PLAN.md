@@ -1,8 +1,8 @@
 # Conduit: Installation, Testing, Operations, and Release Plan
 
 Document status: normative lifecycle, verification, and release specification.
-Every deliverable named in this document is `planned` unless a gate subsection
-in §18 states otherwise. Last revised: 2026-08-30.
+Gate R0 repository infrastructure is `in progress`; R1 through R10 remain
+`planned`. Last revised: 2026-08-30.
 
 Companion sources of truth:
 
@@ -92,9 +92,9 @@ could tempt a shortcut:
   the deterministic model; they never substitute for it.
 - **Status honesty.** Every deliverable in this document carries exactly one
   status: `accepted`, `in progress`, `planned`, or `deferred` (GLOSSARY
-  status vocabulary). At the time of writing all deliverables here are
-  `planned`. Nothing becomes `accepted` without its named automated gate
-  (NFR-MAINT-004).
+  status vocabulary). R0 repository infrastructure is `in progress`; all
+  later-gate deliverables remain `planned`. Nothing becomes `accepted`
+  without its named automated gate (NFR-MAINT-004).
 
 ### 1.3 Evidence purpose
 
@@ -176,8 +176,8 @@ and `workflow`; if not, run `gh auth login --scopes repo,workflow` and
 re-check. Then create and protect the repository:
 
 ```sh
-gh repo create conduit-gateway/conduit --private --source . --remote origin --push
-gh api -X PUT "repos/conduit-gateway/conduit/branches/main/protection" \
+gh repo create Zachshotamartin/conduit --private --source . --remote origin --push
+gh api -X PUT "repos/Zachshotamartin/conduit/branches/main/protection" \
   --input .github/branch-protection.json
 ```
 
@@ -256,7 +256,7 @@ From a clean Tier 1 or Tier 2 machine to green tests:
 3. Clone:
 
    ```sh
-   git clone https://github.com/conduit-gateway/conduit.git
+   git clone https://github.com/Zachshotamartin/conduit.git
    cd conduit
    ```
 
@@ -1171,11 +1171,11 @@ notes like any other document (NFR-MAINT-004); the claims-ladder audit
 ### 14.1 Binary installation and first run
 
 ```sh
-curl -fsSLO https://github.com/conduit-gateway/conduit/releases/download/${VERSION}/conduit-linux-amd64
-curl -fsSLO https://github.com/conduit-gateway/conduit/releases/download/${VERSION}/SHA256SUMS
-curl -fsSLO https://github.com/conduit-gateway/conduit/releases/download/${VERSION}/SHA256SUMS.sig
+curl -fsSLO https://github.com/Zachshotamartin/conduit/releases/download/${VERSION}/conduit-linux-amd64
+curl -fsSLO https://github.com/Zachshotamartin/conduit/releases/download/${VERSION}/SHA256SUMS
+curl -fsSLO https://github.com/Zachshotamartin/conduit/releases/download/${VERSION}/SHA256SUMS.sig
 cosign verify-blob --signature SHA256SUMS.sig \
-  --certificate-identity-regexp 'github.com/conduit-gateway/conduit' \
+  --certificate-identity-regexp 'github.com/Zachshotamartin/conduit' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
 install -m 0755 conduit-linux-amd64 /usr/local/bin/conduit
@@ -1195,13 +1195,13 @@ it. The R10 evidence includes a scripted execution of exactly this flow.
 ### 14.2 Container installation
 
 ```sh
-cosign verify ghcr.io/conduit-gateway/conduit:${VERSION} \
-  --certificate-identity-regexp 'github.com/conduit-gateway/conduit' \
+cosign verify ghcr.io/zachshotamartin/conduit:${VERSION} \
+  --certificate-identity-regexp 'github.com/Zachshotamartin/conduit' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 docker run --rm \
   -v /etc/conduit:/etc/conduit:ro \
   -p 8443:8443 -p 9443:9443 \
-  ghcr.io/conduit-gateway/conduit:${VERSION} \
+  ghcr.io/zachshotamartin/conduit:${VERSION} \
   serve --config /etc/conduit/conduit.yaml
 ```
 
@@ -1257,7 +1257,7 @@ Procedure (rehearsed by CHAOS-001):
    envelopes, control messages, and resume tokens written by N are readable
    by N+1 and vice versa (FR-OPS-005, NFR-COMPAT-005). Cross-version
    fixtures are release-blocking from the first tagged release.
-2. `kubectl set image deployment/conduit conduit=ghcr.io/conduit-gateway/conduit:${NEW_VERSION}`
+2. `kubectl set image deployment/conduit conduit=ghcr.io/zachshotamartin/conduit:${NEW_VERSION}`
    then `kubectl rollout status deployment/conduit`.
 3. Each pod drains per FR-CONN-010; clients reconnect with resume tokens to
    remaining capacity; no client sees a protocol behavior change
@@ -1480,7 +1480,8 @@ Each subsection lists the operations evidence this plan adds; the ticket
 list and per-gate evidence matrix live in BUILD_PLAN §X.9 of the owning gate
 and are referenced, not duplicated. A gate closes only when its BUILD_PLAN
 evidence checklist and the operations additions below are green on one SHA,
-with the run pinned per §11.3. All gates are `planned`.
+with the run pinned per §11.3. R0 is `in progress`; R1 through R10 remain
+`planned`.
 
 ### 18.1 R0 — repository, toolchain, CI, architecture checks
 
@@ -1488,7 +1489,7 @@ Evidence commands and workflows:
 
 ```sh
 gh auth status
-gh api repos/conduit-gateway/conduit/branches/main/protection
+gh api repos/Zachshotamartin/conduit/branches/main/protection
 make bootstrap && make check && make test
 ```
 
@@ -1738,5 +1739,6 @@ FR-ADMIN-008; FR-OPS-001 through FR-OPS-013; NFR-PERF-001 through
 NFR-PERF-006; NFR-SCALE-001 through NFR-SCALE-006; NFR-SEC-001 through
 NFR-SEC-010; NFR-COMPAT-001 through NFR-COMPAT-006; NFR-MAINT-001 through
 NFR-MAINT-006. Gate ownership for every ID follows BUILD_PLAN §19; where
-any statement here and that matrix disagree, the matrix controls. Every
-deliverable in this document is `planned` at the time of writing.
+any statement here and that matrix disagree, the matrix controls. Gate R0
+repository infrastructure in this document is `in progress`; every
+later-gate deliverable remains `planned`.

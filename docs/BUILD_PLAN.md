@@ -1,7 +1,7 @@
 # Conduit: Exhaustive Build Plan
 
-Document status: normative implementation plan for Conduit. Nothing described
-in this plan is implemented at the time of writing.
+Document status: normative implementation plan for Conduit. Gate R0
+repository infrastructure is `in progress`; no product gate is accepted.
 
 Last revised: 2026-08-30.
 
@@ -41,8 +41,7 @@ Every deliverable has exactly one of four statuses:
 A package, type, stub, or happy-path unit test is never completion. A gate is
 accepted only when its user-visible flow, failure behavior, security cases,
 documentation, and the complete §X.9 acceptance checklist pass together in
-CI. At the time of writing every gate is `planned` except where a section
-says otherwise; none does.
+CI. R0 is `in progress` on `gate/r0`; R1 through R10 remain `planned`.
 
 ### 1.2 Gates and the capability each unlocks
 
@@ -103,10 +102,13 @@ No other reordering is permitted without an ADR.
 
 ### 2.1 What exists
 
-This documentation set, the eleven accepted ADRs, and an authenticated
-GitHub CLI (`gh auth status` verified against the account that will own the
-repository, with `repo` and `workflow` scopes — the R0 prerequisite). No
-repository, no code, no CI, no tests, no benchmarks.
+The private GitHub repository, this documentation set, the eleven accepted
+ADRs, the exact Go toolchain pin, repository-local developer bootstrap,
+deterministic clock and error foundations, configuration contracts, and R0
+checks/workflow scaffolding are in progress on `gate/r0`. No gateway
+listener or GraphQL product behavior exists; no gate is accepted and no
+benchmark claim is earned. GitHub branch-protection application is blocked
+by the current account tier and is recorded under `docs/evidence/r0/`.
 
 ### 2.2 The current honest product claim
 
@@ -211,12 +213,17 @@ reports/                   # published benchmark run reports
 docs/
 ```
 
-Import boundaries (enforced by the R0 architecture check, NFR-MAINT-001):
+Negative import boundaries are enforced by the R0 architecture check
+(NFR-MAINT-001):
 `transport` is the only importer of the WebSocket library; `graphql/ast` is
 the only importer of gqlparser; `protocol` imports neither executor nor
 datasource; `queue` and `registry` do not import `bus`; nothing outside
 `platform` reads `runtime.GOOS`; `admin` cannot import `transport` (separate
-listener stack); `observability/redaction` is imported by every sink owner.
+listener stack). The positive rule that every active sink owner directly
+imports `observability/redaction` activates only after the canonical
+redaction API and exact package-level owner inventory are defined; §5.10
+records that explicit deferral so R0 does not invent owners or accept dummy
+imports in doc-only skeletons.
 
 ### 3.3 Core interfaces to establish and preserve
 
@@ -276,8 +283,8 @@ type ConnectionRegistry interface {
 
 type Clock interface {
     Now() time.Time
-    After(d time.Duration) <-chan time.Time
-    Schedule(d time.Duration, fn func()) TimerHandle // timing wheel
+    Schedule(d time.Duration, fn func(now time.Time)) TimerHandle // callback must not block
+    Cancel(h TimerHandle) bool
 }
 ```
 
@@ -506,7 +513,8 @@ by the mutation call succeeding).
    the §3.2 rule set. DoD: fixture violations fail with the rule's reason;
    the real tree passes.
 7. **R0.07 — Build the docs-status and claims lints.** Forbidden-phrase
-   lint (`TODO`, `coming soon`, unstatused deliverables) over docs/ except
+   lint (the placeholder marker spelled T-O-D-O, the phrase “coming” followed
+   by “soon”, and unstatused deliverables) over docs/ except
    OPEN_QUESTIONS; claims-ladder lint over README/MARKETING_PLAN (markers
    `<!-- claim:R<n> -->` must map to accepted gates in a checked-in gate
    status file). DoD: fixtures fail; current tree passes.
@@ -533,7 +541,7 @@ by the mutation call succeeding).
 | clock determinism | Fake clock fires timers on wall time. | Scheduled callbacks fire only on explicit advance, in order, with stable tie-breaking. |
 | error taxonomy | A category lacks safe message or metric key. | Every §4.2 category constructs, serializes safely, and round-trips its category. |
 | archcheck fixtures | A forbidden import passes the checker. | Each fixture violation fails naming the rule; the real tree passes. |
-| docs-status lint | A doc contains `TODO` outside OPEN_QUESTIONS. | Lint fails on fixture, passes on tree. |
+| docs-status lint | A doc contains the configured placeholder marker outside OPEN_QUESTIONS. | Lint fails on fixture, passes on tree. |
 | claims lint | README claims a capability with no accepted gate. | Lint fails on fixture claim marker, passes on tree. |
 | config precedence | Env value fails to override file value. | Table-driven precedence and validation-phase tests pass. |
 
@@ -572,7 +580,12 @@ R0 is accepted only when:
 R0 defers all product code: no listener, no parser, no schema, no executor,
 no protocol, no index, no bus, no benchmarks. The timing-wheel
 implementation is deferred to R2. Release packaging jobs are skeletons only
-(R10 fills them). Public repository visibility is deferred to R10.
+(R10 fills them). Public repository visibility is deferred to R10. The
+positive `observability/redaction` must-import rule is deferred to the first
+gate that implements a sink: that gate must define the canonical redaction
+API and a machine-readable exact owner inventory before adding sink code;
+R8 closes the inventory across logs, traces, metrics, errors, and diagnostics.
+R0 continues to enforce the negative observability-SDK confinement rule.
 
 ### 5.11 Requirements traced
 
