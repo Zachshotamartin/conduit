@@ -411,7 +411,7 @@ accepted. The claims-ladder audit is a release-blocking CI check from R0
 
 ## 5. R0 — Repository, Toolchain, CI, and Architecture Checks
 
-**Status:** planned.
+**Status:** in progress.
 
 **Effort range:** 3–5 focused days.
 

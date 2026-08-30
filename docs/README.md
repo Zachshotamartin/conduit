@@ -1,5 +1,7 @@
 # Conduit Documentation Index
 
+Document status: normative documentation index. Last revised: 2026-08-30.
+
 Conduit is a self-hosted GraphQL gateway whose reason for existing is the
 subscription path: clients subscribe over WebSocket with per-subscription
 filters, mutations publish, and the gateway fans out to every matching

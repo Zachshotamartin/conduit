@@ -1,5 +1,7 @@
 # R0 branch-protection evidence
 
+Status: in progress.
+
 The intended `main` protection policy is checked in at
 `.github/branch-protection.json`. On 2026-08-30, applying that policy to
 the private `Zachshotamartin/conduit` repository returned GitHub HTTP 403:
