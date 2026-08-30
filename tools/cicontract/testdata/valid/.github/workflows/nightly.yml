@@ -15,8 +15,10 @@ jobs:
     timeout-minutes: 480
     steps:
       - run: go test -mod=vendor ./internal/protocol/...
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+      - run: '"$(go env GOPATH)/bin/govulncheck" ./...'
       - name: Retain fuzz corpora
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: fuzz-corpora
           path: testdata/fuzz/
@@ -28,7 +30,7 @@ jobs:
     steps:
       - run: go test -mod=vendor ./internal/queue/...
       - name: Retain soak captures
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: soak-captures
           path: reports/soak/
@@ -40,7 +42,7 @@ jobs:
     steps:
       - run: go test -mod=vendor ./test/fault/...
       - name: Retain chaos captures
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: chaos-captures
           path: reports/chaos/

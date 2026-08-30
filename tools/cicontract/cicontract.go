@@ -121,6 +121,72 @@ var workflowContracts = []workflowContract{
 
 var raceJobs = []string{"unit-race", "proto-race", "authz-race", "index-race"}
 
+const (
+	checkoutActionUse       = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262"
+	setupGoActionUse        = "actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff"
+	uploadArtifactActionUse = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+	govulncheckInstall      = "go install golang.org/x/vuln/cmd/govulncheck@v1.1.4"
+	govulncheckRun          = `"$(go env GOPATH)/bin/govulncheck" ./...`
+)
+
+var allowedActionUses = map[string]bool{
+	checkoutActionUse:       true,
+	setupGoActionUse:        true,
+	uploadArtifactActionUse: true,
+}
+
+var exactRaceCommands = map[string]string{
+	"unit-race":  "go test -mod=vendor -race -shuffle=on ./...",
+	"proto-race": "go test -mod=vendor -race -shuffle=on ./internal/protocol/...",
+	"authz-race": "go test -mod=vendor -race -shuffle=on ./internal/auth/...",
+	"index-race": "go test -mod=vendor -race -shuffle=on ./internal/filter/index/...",
+}
+
+var exactProtectedJobCommands = map[string]map[string][]string{
+	"pr": {
+		"lint": {
+			"GO=go ./scripts/check-format.sh",
+			"./scripts/check-determinism.sh",
+			`"$(go env GOPATH)/bin/staticcheck" ./...`,
+			`"$(go env GOPATH)/bin/golangci-lint" run`,
+			"go run -mod=vendor ./tools/claimslint .",
+		},
+		"vet":              {"go vet -mod=vendor ./..."},
+		"arch-check":       {"go run -mod=vendor ./tools/archcheck"},
+		"docs-status-lint": {"go run -mod=vendor ./tools/docsstatus ./docs", "go run -mod=vendor ./tools/claimslint ."},
+		"metrics-contract": {"go test -mod=vendor ./internal/observability/..."},
+		"deps-audit": {
+			"go test -mod=vendor ./tools/depsaudit",
+			"go run -mod=vendor ./tools/depsaudit -root .",
+			govulncheckInstall,
+			govulncheckRun,
+		},
+		"trace-check": {
+			"go test -mod=vendor ./tools/tracecheck ./internal/observability/... ./internal/transport/...",
+			"go run -mod=vendor ./tools/tracecheck -root .",
+		},
+	},
+	"integration": {
+		"conformance-node":     {"go test -mod=vendor -race ./test/conformance/... ./internal/protocol/..."},
+		"integration-nats":     {"go test -mod=vendor -race ./internal/bus/nats/... ./test/fault/..."},
+		"integration-postgres": {"go test -mod=vendor -race ./internal/datasource/postgres/..."},
+		"socket-hostile":       {"go test -mod=vendor -race ./test/hostile/... ./internal/transport/..."},
+	},
+}
+
+var platformCorrectnessCommands = []string{
+	"GO=go ./scripts/check-format.sh",
+	"./scripts/check-determinism.sh",
+	"go vet -mod=vendor ./...",
+	"go test -mod=vendor -race -shuffle=on ./...",
+	"go run -mod=vendor ./tools/archcheck",
+	"go run -mod=vendor ./tools/docsstatus ./docs",
+	"go run -mod=vendor ./tools/claimslint .",
+	"go run -mod=vendor ./tools/cicontract -root .",
+	"go run -mod=vendor ./tools/depsaudit -root .",
+	"go run -mod=vendor ./tools/tracecheck -root .",
+}
+
 // Check reads branch-protection.json and the four workflow files below root.
 // Read and syntax failures are returned as errors; semantic drift is returned
 // as sorted Findings so callers can report every violation in one run.
@@ -144,9 +210,15 @@ func Check(root string) (Report, error) {
 
 	validateTriggers(&report, workflows)
 	validateRaceJobs(&report, workflows["pr"])
-	validateRequiredCommands(&report, workflows["pr"])
+	validateRequiredCommands(&report, workflows)
+	validateNightlyGovulncheck(&report, workflows["nightly"])
 	validateVendorMode(&report, workflows)
-	validateMacOSCorrectness(&report, workflows["pr"])
+	validatePlatformCorrectness(&report, workflows["pr"], platformContract{
+		job: "macos-correctness", runner: "macos-14", code: "platform.macos", label: "macOS",
+	})
+	validatePlatformCorrectness(&report, workflows["pr"], platformContract{
+		job: "linux-arm64-correctness", runner: "ubuntu-24.04-arm", code: "platform.linux-arm64", label: "Linux arm64",
+	})
 	validateContexts(&report, protection, workflows)
 
 	sort.Slice(report.Contexts, func(i, j int) bool {
@@ -198,6 +270,7 @@ func validateWorkflow(report *Report, file string, workflow *workflow, contract 
 	wantedJobs := stringSet(contract.jobs)
 	if contract.name == "pr" {
 		wantedJobs["macos-correctness"] = true
+		wantedJobs["linux-arm64-correctness"] = true
 	}
 	for _, expected := range contract.jobs {
 		job, exists := workflow.Jobs[expected]
@@ -223,8 +296,27 @@ func validateWorkflow(report *Report, file string, workflow *workflow, contract 
 
 	uploads := 0
 	for jobName, job := range workflow.Jobs {
+		if job.HasIf {
+			report.add("job.condition", file, "jobs."+jobName+".if", fmt.Sprintf("job-level if condition %q is forbidden because every declared check must report", job.If))
+		}
+		if job.HasContinueOnError {
+			report.add("job.continue-on-error", file, "jobs."+jobName+".continue-on-error", fmt.Sprintf("job-level continue-on-error value %q is forbidden", job.ContinueOnError))
+		}
+		if job.Uses != "" {
+			report.add("action.pin", file, "jobs."+jobName+".uses", fmt.Sprintf("job-level reusable workflow use %q is not approved", job.Uses))
+		}
 		for stepIndex, step := range job.Steps {
-			if !strings.HasPrefix(step.Uses, "actions/upload-artifact@") {
+			stepPath := fmt.Sprintf("jobs.%s.steps.%d", jobName, stepIndex)
+			if step.HasIf && !isUploadArtifact(step.Uses) {
+				report.add("step.condition", file, stepPath+".if", fmt.Sprintf("step-level if condition %q is allowed only on upload-artifact evidence steps", step.If))
+			}
+			if step.HasContinueOnError {
+				report.add("step.continue-on-error", file, stepPath+".continue-on-error", fmt.Sprintf("step-level continue-on-error value %q is forbidden", step.ContinueOnError))
+			}
+			if step.Uses != "" && !allowedActionUses[step.Uses] {
+				report.add("action.pin", file, stepPath+".uses", fmt.Sprintf("action use %q is not one of the exact approved SHA pins", step.Uses))
+			}
+			if !isUploadArtifact(step.Uses) {
 				continue
 			}
 			uploads++
@@ -278,51 +370,42 @@ func validateRaceJobs(report *Report, pr *workflow) {
 		if !exists {
 			continue
 		}
-		found := false
-		for _, step := range job.Steps {
-			if isRaceTestCommand(step.Run) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			report.add("job.race", workflowFile("pr"), "jobs."+jobName+".steps", "required race job must execute go test with -race")
+		command := exactRaceCommands[jobName]
+		if !hasExactRunStep(job, command) {
+			report.add("job.race", workflowFile("pr"), "jobs."+jobName+".steps", fmt.Sprintf("required race job must execute exact command %q", command))
 		}
 	}
 }
 
-func validateRequiredCommands(report *Report, pr *workflow) {
-	requireJobCommands(report, pr, "lint", []string{
-		"GO=go ./scripts/check-format.sh",
-		"./scripts/check-determinism.sh",
-		"staticcheck",
-		"golangci-lint",
-		"go run -mod=vendor ./tools/claimslint .",
-	})
-	requireJobCommands(report, pr, "docs-status-lint", []string{
-		"go run -mod=vendor ./tools/docsstatus ./docs",
-		"go run -mod=vendor ./tools/claimslint .",
-	})
-	requireJobCommands(report, pr, "deps-audit", []string{
-		"go test -mod=vendor ./tools/depsaudit",
-		"go run -mod=vendor ./tools/depsaudit -root .",
-		"govulncheck",
-	})
-	requireJobCommands(report, pr, "trace-check", []string{
-		"go test -mod=vendor ./tools/tracecheck",
-		"go run -mod=vendor ./tools/tracecheck -root .",
-	})
+func validateRequiredCommands(report *Report, workflows map[string]*workflow) {
+	for workflowName, jobs := range exactProtectedJobCommands {
+		workflow := workflows[workflowName]
+		for jobName, required := range jobs {
+			requireExactJobCommands(report, workflowName, workflow, jobName, required)
+		}
+	}
 }
 
-func requireJobCommands(report *Report, workflow *workflow, jobName string, required []string) {
+func requireExactJobCommands(report *Report, workflowName string, workflow *workflow, jobName string, required []string) {
 	job := workflow.Jobs[jobName]
 	if job == nil {
 		return
 	}
-	commands := jobCommands(job)
 	for _, command := range required {
-		if !strings.Contains(commands, command) {
-			report.add("job.command", workflowFile("pr"), "jobs."+jobName+".steps", fmt.Sprintf("required command %q is missing", command))
+		if !hasExactRunStep(job, command) {
+			report.add("job.command", workflowFile(workflowName), "jobs."+jobName+".steps", fmt.Sprintf("required exact command %q is missing", command))
+		}
+	}
+}
+
+func validateNightlyGovulncheck(report *Report, nightly *workflow) {
+	job := nightly.Jobs["fuzz"]
+	if job == nil {
+		return
+	}
+	for _, command := range []string{govulncheckInstall, govulncheckRun} {
+		if !hasExactRunStep(job, command) {
+			report.add("nightly.govulncheck", workflowFile("nightly"), "jobs.fuzz.steps", fmt.Sprintf("nightly vulnerability scan must execute exact command %q", command))
 		}
 	}
 }
@@ -344,44 +427,47 @@ func validateVendorMode(report *Report, workflows map[string]*workflow) {
 	}
 }
 
-func validateMacOSCorrectness(report *Report, pr *workflow) {
-	job := pr.Jobs["macos-correctness"]
+type platformContract struct {
+	job    string
+	runner string
+	code   string
+	label  string
+}
+
+func validatePlatformCorrectness(report *Report, pr *workflow, contract platformContract) {
+	job := pr.Jobs[contract.job]
 	if job == nil {
-		report.add("platform.macos", workflowFile("pr"), "jobs.macos-correctness", "unprotected macOS correctness job is required")
+		report.add(contract.code, workflowFile("pr"), "jobs."+contract.job, fmt.Sprintf("unprotected %s correctness job is required", contract.label))
 		return
 	}
-	if job.Name != "macos-correctness" || job.RunsOn != "macos-14" {
-		report.add("platform.macos", workflowFile("pr"), "jobs.macos-correctness", "macOS correctness job must be named macos-correctness and run on macos-14")
+	if job.Name != contract.job || job.RunsOn != contract.runner {
+		report.add(contract.code, workflowFile("pr"), "jobs."+contract.job, fmt.Sprintf("%s correctness job must be named %s and run on %s", contract.label, contract.job, contract.runner))
 	}
 	if job.TimeoutMinutes <= 0 || job.TimeoutMinutes > 15 {
-		report.add("job.timeout", workflowFile("pr"), "jobs.macos-correctness.timeout-minutes", "macOS correctness timeout must be within 15 minutes")
+		report.add("job.timeout", workflowFile("pr"), "jobs."+contract.job+".timeout-minutes", fmt.Sprintf("%s correctness timeout must be within 15 minutes", contract.label))
 	}
 	if job.HasPermissions {
-		report.add("workflow.permissions", workflowFile("pr"), "jobs.macos-correctness.permissions", "job-level permission overrides are forbidden")
+		report.add("workflow.permissions", workflowFile("pr"), "jobs."+contract.job+".permissions", "job-level permission overrides are forbidden")
 	}
-	commands := jobCommands(job)
-	for _, required := range []string{
-		"GO=go ./scripts/check-format.sh",
-		"./scripts/check-determinism.sh",
-		"go vet -mod=vendor ./...",
-		"go test -mod=vendor -race -shuffle=on ./...",
-		"go run -mod=vendor ./tools/archcheck",
-		"go run -mod=vendor ./tools/cicontract -root .",
-	} {
-		if !strings.Contains(commands, required) {
-			report.add("platform.macos", workflowFile("pr"), "jobs.macos-correctness.steps", fmt.Sprintf("required macOS command %q is missing", required))
+	for _, required := range platformCorrectnessCommands {
+		if !hasExactRunStep(job, required) {
+			report.add(contract.code, workflowFile("pr"), "jobs."+contract.job+".steps", fmt.Sprintf("required %s command %q is missing", contract.label, required))
 		}
 	}
 }
 
-func jobCommands(job *workflowJob) string {
-	commands := make([]string, 0, len(job.Steps))
+func hasExactRunStep(job *workflowJob, command string) bool {
 	for _, step := range job.Steps {
-		if step.Run != "" {
-			commands = append(commands, step.Run)
+		if strings.TrimSpace(step.Run) == command {
+			return true
 		}
 	}
-	return strings.Join(commands, "\n")
+	return false
+}
+
+func isUploadArtifact(use string) bool {
+	action, _, found := strings.Cut(use, "@")
+	return found && action == "actions/upload-artifact"
 }
 
 func projectGoCommandsWithoutVendor(command string) []string {
@@ -506,21 +592,6 @@ func hasDailyCron(crons []string) bool {
 	return false
 }
 
-func isRaceTestCommand(command string) bool {
-	fields := strings.Fields(command)
-	goTest := false
-	race := false
-	for index, field := range fields {
-		if field == "go" && index+1 < len(fields) && fields[index+1] == "test" {
-			goTest = true
-		}
-		if field == "-race" {
-			race = true
-		}
-	}
-	return goTest && race
-}
-
 type workflow struct {
 	Name             string
 	Events           map[string]*workflowEvent
@@ -537,17 +608,26 @@ type workflowEvent struct {
 }
 
 type workflowJob struct {
-	Name           string
-	RunsOn         string
-	TimeoutMinutes int
-	HasPermissions bool
-	Steps          []workflowStep
+	Name               string
+	RunsOn             string
+	TimeoutMinutes     int
+	HasPermissions     bool
+	Uses               string
+	HasIf              bool
+	If                 string
+	HasContinueOnError bool
+	ContinueOnError    string
+	Steps              []workflowStep
 }
 
 type workflowStep struct {
-	Run  string
-	Uses string
-	With map[string]string
+	Run                string
+	Uses               string
+	HasIf              bool
+	If                 string
+	HasContinueOnError bool
+	ContinueOnError    string
+	With               map[string]string
 }
 
 func (workflow *workflow) hasEvent(name string) bool {
@@ -681,6 +761,14 @@ func parseWorkflow(path string) (*workflow, error) {
 					job.Name = scalar(value)
 				case "runs-on":
 					job.RunsOn = scalar(value)
+				case "uses":
+					job.Uses = scalar(value)
+				case "if":
+					job.HasIf = true
+					job.If = scalar(value)
+				case "continue-on-error":
+					job.HasContinueOnError = true
+					job.ContinueOnError = scalar(value)
 				case "timeout-minutes":
 					minutes, conversionErr := strconv.Atoi(scalar(value))
 					if conversionErr != nil {
@@ -820,5 +908,11 @@ func assignStepValue(step *workflowStep, key, value string) {
 		step.Run = value
 	case "uses":
 		step.Uses = value
+	case "if":
+		step.HasIf = true
+		step.If = value
+	case "continue-on-error":
+		step.HasContinueOnError = true
+		step.ContinueOnError = value
 	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -73,7 +74,12 @@ func TestValidFixtureSatisfiesCIContract(t *testing.T) {
 		t.Fatalf("valid fixture findings:\n%s", formatFindings(report.Findings))
 	}
 	if len(report.Contexts) != 15 {
-		t.Fatalf("protected context count = %d, want exactly 15; macos-correctness must remain unprotected", len(report.Contexts))
+		t.Fatalf("protected context count = %d, want exactly 15; platform correctness jobs must remain unprotected", len(report.Contexts))
+	}
+	for _, mapping := range report.Contexts {
+		if mapping.Job == "macos-correctness" || mapping.Job == "linux-arm64-correctness" {
+			t.Fatalf("platform correctness job %q unexpectedly became a protected context", mapping.Job)
+		}
 	}
 
 	want := map[string]string{
@@ -130,13 +136,20 @@ func TestInvalidFixtureProvesEveryContractClassCanFail(t *testing.T) {
 	}
 
 	wantCodes := []string{
+		"action.pin",
 		"artifact.retention",
 		"job.command",
+		"job.condition",
+		"job.continue-on-error",
 		"job.race",
 		"job.timeout",
 		"job.vendor-mode",
+		"nightly.govulncheck",
+		"platform.linux-arm64",
 		"platform.macos",
 		"protection.context",
+		"step.condition",
+		"step.continue-on-error",
 		"workflow.jobs",
 		"workflow.permissions",
 		"workflow.trigger",
@@ -153,6 +166,218 @@ func TestInvalidFixtureProvesEveryContractClassCanFail(t *testing.T) {
 			t.Errorf("invalid fixture did not produce %q; findings:\n%s", code, formatFindings(report.Findings))
 		}
 	}
+}
+
+func TestHostileWorkflowBypassesFailClosed(t *testing.T) {
+	t.Parallel()
+
+	const uploadPin = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+	tests := []struct {
+		name     string
+		workflow string
+		old      string
+		new      string
+		wantCode string
+		wantPath string
+	}{
+		{
+			name:     "job level condition",
+			workflow: "pr",
+			old:      "  lint:\n    name: lint\n    runs-on: ubuntu-latest",
+			new:      "  lint:\n    name: lint\n    if: success()\n    runs-on: ubuntu-latest",
+			wantCode: "job.condition",
+			wantPath: "jobs.lint.if",
+		},
+		{
+			name:     "job continue on error even false",
+			workflow: "pr",
+			old:      "  lint:\n    name: lint\n    runs-on: ubuntu-latest",
+			new:      "  lint:\n    name: lint\n    continue-on-error: false\n    runs-on: ubuntu-latest",
+			wantCode: "job.continue-on-error",
+			wantPath: "jobs.lint.continue-on-error",
+		},
+		{
+			name:     "ordinary step condition",
+			workflow: "pr",
+			old:      "      - run: GO=go ./scripts/check-format.sh",
+			new:      "      - run: GO=go ./scripts/check-format.sh\n        if: success()",
+			wantCode: "step.condition",
+			wantPath: "jobs.lint.steps.0.if",
+		},
+		{
+			name:     "step continue on error even false",
+			workflow: "pr",
+			old:      "      - run: GO=go ./scripts/check-format.sh",
+			new:      "      - run: GO=go ./scripts/check-format.sh\n        continue-on-error: false",
+			wantCode: "step.continue-on-error",
+			wantPath: "jobs.lint.steps.0.continue-on-error",
+		},
+		{
+			name:     "mutable known action",
+			workflow: "pr",
+			old:      "uses: " + uploadPin,
+			new:      "uses: actions/upload-artifact@v4",
+			wantCode: "action.pin",
+			wantPath: "jobs.unit-race.steps.1.uses",
+		},
+		{
+			name:     "unknown pinned action",
+			workflow: "pr",
+			old:      "uses: " + uploadPin,
+			new:      "uses: attacker/example@0123456789abcdef0123456789abcdef01234567",
+			wantCode: "action.pin",
+			wantPath: "jobs.unit-race.steps.1.uses",
+		},
+		{
+			name:     "job level reusable workflow",
+			workflow: "pr",
+			old:      "  lint:\n    name: lint\n    runs-on: ubuntu-latest",
+			new:      "  lint:\n    name: lint\n    uses: attacker/example/.github/workflows/ci.yml@main\n    runs-on: ubuntu-latest",
+			wantCode: "action.pin",
+			wantPath: "jobs.lint.uses",
+		},
+		{
+			name:     "narrowed unit race scope",
+			workflow: "pr",
+			old:      "      - run: go test -mod=vendor -race -shuffle=on ./...\n      - name: Retain failure evidence",
+			new:      "      - run: go test -mod=vendor -race -shuffle=on ./internal/...\n      - name: Retain failure evidence",
+			wantCode: "job.race",
+			wantPath: "jobs.unit-race.steps",
+		},
+		{
+			name:     "echoed unit race command",
+			workflow: "pr",
+			old:      "      - run: go test -mod=vendor -race -shuffle=on ./...\n      - name: Retain failure evidence",
+			new:      "      - run: echo go test -mod=vendor -race -shuffle=on ./...\n      - name: Retain failure evidence",
+			wantCode: "job.race",
+			wantPath: "jobs.unit-race.steps",
+		},
+		{
+			name:     "nightly scanner install omitted",
+			workflow: "nightly",
+			old:      "      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4\n",
+			new:      "",
+			wantCode: "nightly.govulncheck",
+			wantPath: "jobs.fuzz.steps",
+		},
+		{
+			name:     "nightly scanner scope narrowed",
+			workflow: "nightly",
+			old:      "      - run: '\"$(go env GOPATH)/bin/govulncheck\" ./...'",
+			new:      "      - run: '\"$(go env GOPATH)/bin/govulncheck\" ./cmd/...'",
+			wantCode: "nightly.govulncheck",
+			wantPath: "jobs.fuzz.steps",
+		},
+		{
+			name:     "linux arm job omitted",
+			workflow: "pr",
+			old:      "  linux-arm64-correctness:\n",
+			new:      "  linux-arm64-disabled:\n",
+			wantCode: "platform.linux-arm64",
+			wantPath: "jobs.linux-arm64-correctness",
+		},
+		{
+			name:     "linux arm runner substituted",
+			workflow: "pr",
+			old:      "    runs-on: ubuntu-24.04-arm",
+			new:      "    runs-on: ubuntu-latest",
+			wantCode: "platform.linux-arm64",
+			wantPath: "jobs.linux-arm64-correctness",
+		},
+		{
+			name:     "linux arm suite narrowed",
+			workflow: "pr",
+			old:      "    runs-on: ubuntu-24.04-arm\n    timeout-minutes: 15\n    steps:\n      - run: GO=go ./scripts/check-format.sh\n      - run: ./scripts/check-determinism.sh\n      - run: go vet -mod=vendor ./...\n      - run: go test -mod=vendor -race -shuffle=on ./...",
+			new:      "    runs-on: ubuntu-24.04-arm\n    timeout-minutes: 15\n    steps:\n      - run: GO=go ./scripts/check-format.sh\n      - run: ./scripts/check-determinism.sh\n      - run: go vet -mod=vendor ./...\n      - run: go test -mod=vendor -race -shuffle=on ./internal/...",
+			wantCode: "platform.linux-arm64",
+			wantPath: "jobs.linux-arm64-correctness.steps",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := copyValidFixture(t)
+			mutateWorkflow(t, root, test.workflow, test.old, test.new)
+			report, err := Check(root)
+			if err != nil {
+				t.Fatalf("Check(hostile fixture): %v", err)
+			}
+			if !hasFinding(report.Findings, test.wantCode, test.wantPath) {
+				t.Fatalf("hostile fixture did not report %s at %s; findings:\n%s", test.wantCode, test.wantPath, formatFindings(report.Findings))
+			}
+		})
+	}
+}
+
+func TestApprovedActionPinsAreExact(t *testing.T) {
+	t.Parallel()
+
+	want := map[string]bool{
+		"actions/checkout@11d5960a326750d5838078e36cf38b85af677262":        true,
+		"actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff":        true,
+		"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02": true,
+	}
+	if diff := diffBoolMap(allowedActionUses, want); diff != "" {
+		t.Fatalf("approved action pins mismatch (-got +want):\n%s", diff)
+	}
+}
+
+func copyValidFixture(t *testing.T) string {
+	t.Helper()
+
+	source := filepath.Join("testdata", "valid")
+	destination := filepath.Join(t.TempDir(), "repository")
+	err := filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(destination, relative)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, contents, 0o644)
+	})
+	if err != nil {
+		t.Fatalf("copy valid fixture: %v", err)
+	}
+	return destination
+}
+
+func mutateWorkflow(t *testing.T, root, workflowName, old, replacement string) {
+	t.Helper()
+
+	path := filepath.Join(root, ".github", "workflows", workflowName+".yml")
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read workflow fixture: %v", err)
+	}
+	if count := strings.Count(string(contents), old); count == 0 {
+		t.Fatalf("mutation source does not occur in %s: %q", path, old)
+	}
+	updated := strings.Replace(string(contents), old, replacement, 1)
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		t.Fatalf("write workflow fixture: %v", err)
+	}
+}
+
+func hasFinding(findings []Finding, code, path string) bool {
+	for _, finding := range findings {
+		if finding.Code == code && finding.Path == path {
+			return true
+		}
+	}
+	return false
 }
 
 func formatFindings(findings []Finding) string {
@@ -197,4 +422,16 @@ func diffStringMap(got, want map[string]string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func diffBoolMap(got, want map[string]bool) string {
+	gotStrings := make(map[string]string, len(got))
+	wantStrings := make(map[string]string, len(want))
+	for key, value := range got {
+		gotStrings[key] = fmt.Sprint(value)
+	}
+	for key, value := range want {
+		wantStrings[key] = fmt.Sprint(value)
+	}
+	return diffStringMap(gotStrings, wantStrings)
 }

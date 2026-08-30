@@ -14,28 +14,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - run: go test -mod=vendor ./test/conformance/...
+      - run: go test -mod=vendor -race ./test/conformance/... ./internal/protocol/...
   integration-nats:
     name: integration-nats
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - run: go test -mod=vendor ./internal/bus/nats/...
+      - run: go test -mod=vendor -race ./internal/bus/nats/... ./test/fault/...
   integration-postgres:
     name: integration-postgres
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - run: go test -mod=vendor ./internal/datasource/postgres/...
+      - run: go test -mod=vendor -race ./internal/datasource/postgres/...
   socket-hostile:
     name: socket-hostile
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - run: go test -mod=vendor ./test/hostile/...
+      - run: go test -mod=vendor -race ./test/hostile/... ./internal/transport/...
       - name: Retain integration failure evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: integration-failure-evidence
           path: reports/

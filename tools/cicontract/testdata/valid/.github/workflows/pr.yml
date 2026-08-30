@@ -16,8 +16,8 @@ jobs:
     steps:
       - run: GO=go ./scripts/check-format.sh
       - run: ./scripts/check-determinism.sh
-      - run: staticcheck ./...
-      - run: golangci-lint run
+      - run: '"$(go env GOPATH)/bin/staticcheck" ./...'
+      - run: '"$(go env GOPATH)/bin/golangci-lint" run'
       - run: go run -mod=vendor ./tools/claimslint .
   vet:
     name: vet
@@ -36,10 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go test -mod=vendor -race ./...
+      - run: go test -mod=vendor -race -shuffle=on ./...
       - name: Retain failure evidence
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: pr-failure-evidence
           path: reports/
@@ -49,19 +49,19 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go test -mod=vendor -race ./internal/protocol/...
+      - run: go test -mod=vendor -race -shuffle=on ./internal/protocol/...
   authz-race:
     name: authz-race
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go test -mod=vendor -race ./internal/auth/...
+      - run: go test -mod=vendor -race -shuffle=on ./internal/auth/...
   index-race:
     name: index-race
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go test -mod=vendor -race ./internal/filter/index/...
+      - run: go test -mod=vendor -race -shuffle=on ./internal/filter/index/...
   docs-status-lint:
     name: docs-status-lint
     runs-on: ubuntu-latest
@@ -82,13 +82,14 @@ jobs:
     steps:
       - run: go test -mod=vendor ./tools/depsaudit
       - run: go run -mod=vendor ./tools/depsaudit -root .
-      - run: govulncheck ./...
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+      - run: '"$(go env GOPATH)/bin/govulncheck" ./...'
   trace-check:
     name: trace-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go test -mod=vendor ./tools/tracecheck
+      - run: go test -mod=vendor ./tools/tracecheck ./internal/observability/... ./internal/transport/...
       - run: go run -mod=vendor ./tools/tracecheck -root .
   macos-correctness:
     name: macos-correctness
@@ -100,4 +101,23 @@ jobs:
       - run: go vet -mod=vendor ./...
       - run: go test -mod=vendor -race -shuffle=on ./...
       - run: go run -mod=vendor ./tools/archcheck
+      - run: go run -mod=vendor ./tools/docsstatus ./docs
+      - run: go run -mod=vendor ./tools/claimslint .
       - run: go run -mod=vendor ./tools/cicontract -root .
+      - run: go run -mod=vendor ./tools/depsaudit -root .
+      - run: go run -mod=vendor ./tools/tracecheck -root .
+  linux-arm64-correctness:
+    name: linux-arm64-correctness
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - run: GO=go ./scripts/check-format.sh
+      - run: ./scripts/check-determinism.sh
+      - run: go vet -mod=vendor ./...
+      - run: go test -mod=vendor -race -shuffle=on ./...
+      - run: go run -mod=vendor ./tools/archcheck
+      - run: go run -mod=vendor ./tools/docsstatus ./docs
+      - run: go run -mod=vendor ./tools/claimslint .
+      - run: go run -mod=vendor ./tools/cicontract -root .
+      - run: go run -mod=vendor ./tools/depsaudit -root .
+      - run: go run -mod=vendor ./tools/tracecheck -root .
