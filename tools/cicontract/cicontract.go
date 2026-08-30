@@ -121,13 +121,6 @@ var workflowContracts = []workflowContract{
 
 var raceJobs = []string{"unit-race", "proto-race", "authz-race", "index-race"}
 
-var integrationPaths = []string{
-	"internal/transport/**",
-	"internal/bus/**",
-	"internal/datasource/**",
-	"internal/auth/**",
-}
-
 // Check reads branch-protection.json and the four workflow files below root.
 // Read and syntax failures are returned as errors; semantic drift is returned
 // as sorted Findings so callers can report every violation in one run.
@@ -253,15 +246,19 @@ func validateWorkflow(report *Report, file string, workflow *workflow, contract 
 
 func validateTriggers(report *Report, workflows map[string]*workflow) {
 	pr := workflows["pr"]
-	if !pr.hasEvent("pull_request") || !equalStringSet(pr.event("push").Branches, []string{"main"}) {
+	if !pr.hasEvent("pull_request") ||
+		len(pr.event("pull_request").Paths) != 0 ||
+		len(pr.event("pull_request").Branches) != 0 ||
+		!equalStringSet(pr.event("push").Branches, []string{"main"}) {
 		report.add("workflow.trigger", workflowFile("pr"), "on", "PR workflow must run for every pull request and pushes to main")
 	}
 
 	integration := workflows["integration"]
 	if !integration.hasEvent("pull_request") ||
-		!equalStringSet(integration.event("pull_request").Paths, integrationPaths) ||
+		len(integration.event("pull_request").Paths) != 0 ||
+		len(integration.event("pull_request").Branches) != 0 ||
 		!equalStringSet(integration.event("push").Branches, []string{"main"}) {
-		report.add("workflow.trigger", workflowFile("integration"), "on", "integration workflow must path-filter package PRs and run on every push to main")
+		report.add("workflow.trigger", workflowFile("integration"), "on", "required integration contexts must run for every pull request and pushes to main; workflow-level path filters are forbidden")
 	}
 
 	nightly := workflows["nightly"]

@@ -2,11 +2,6 @@ name: integration
 
 on:
   pull_request:
-    paths:
-      - internal/transport/**
-      - internal/bus/**
-      - internal/datasource/**
-      - internal/auth/**
   push:
     branches: [main]
 
