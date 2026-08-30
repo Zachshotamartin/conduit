@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./cmd/...
       - name: Retain release diagnostics until permanent attachment
         uses: actions/upload-artifact@v4
         with:
@@ -26,22 +26,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./cmd/...
   cross-version-fixtures:
     name: cross-version-fixtures
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./test/fixtures/...
   image-scan:
     name: image-scan
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./cmd/conduit/...
   kind-install:
     name: kind-install
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./test/conformance/...

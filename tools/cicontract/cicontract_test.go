@@ -1,12 +1,66 @@
-package cicontract
+package main
 
 import (
+	"bytes"
 	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 )
+
+func TestRunReportsSuccessAndSemanticFailure(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		root       string
+		wantCode   int
+		wantOutput string
+	}{
+		{
+			name:       "valid",
+			root:       filepath.Join("testdata", "valid"),
+			wantCode:   0,
+			wantOutput: "15 protected contexts verified",
+		},
+		{
+			name:       "invalid",
+			root:       filepath.Join("testdata", "invalid"),
+			wantCode:   1,
+			wantOutput: "protection.context",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			got := Run([]string{"-root", test.root}, &stdout, &stderr)
+			if got != test.wantCode {
+				t.Fatalf("Run() = %d, want %d; stdout=%q stderr=%q", got, test.wantCode, stdout.String(), stderr.String())
+			}
+			combined := stdout.String() + stderr.String()
+			if !strings.Contains(combined, test.wantOutput) {
+				t.Fatalf("Run() output = %q, want substring %q", combined, test.wantOutput)
+			}
+		})
+	}
+}
+
+func TestRunRejectsUnexpectedArguments(t *testing.T) {
+	t.Parallel()
+
+	var stderr bytes.Buffer
+	if got := Run([]string{"repository"}, &bytes.Buffer{}, &stderr); got != 2 {
+		t.Fatalf("Run(unexpected argument) = %d, want 2", got)
+	}
+	if !strings.Contains(stderr.String(), "unexpected arguments") {
+		t.Fatalf("Run(unexpected argument) stderr = %q, want actionable usage error", stderr.String())
+	}
+}
 
 func TestValidFixtureSatisfiesCIContract(t *testing.T) {
 	t.Parallel()
@@ -17,6 +71,9 @@ func TestValidFixtureSatisfiesCIContract(t *testing.T) {
 	}
 	if len(report.Findings) != 0 {
 		t.Fatalf("valid fixture findings:\n%s", formatFindings(report.Findings))
+	}
+	if len(report.Contexts) != 15 {
+		t.Fatalf("protected context count = %d, want exactly 15; macos-correctness must remain unprotected", len(report.Contexts))
 	}
 
 	want := map[string]string{
@@ -74,8 +131,11 @@ func TestInvalidFixtureProvesEveryContractClassCanFail(t *testing.T) {
 
 	wantCodes := []string{
 		"artifact.retention",
+		"job.command",
 		"job.race",
 		"job.timeout",
+		"job.vendor-mode",
+		"platform.macos",
 		"protection.context",
 		"workflow.jobs",
 		"workflow.permissions",

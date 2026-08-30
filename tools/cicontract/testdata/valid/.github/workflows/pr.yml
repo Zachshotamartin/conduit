@@ -14,25 +14,29 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - run: GO=go ./scripts/check-format.sh
+      - run: ./scripts/check-determinism.sh
       - run: staticcheck ./...
+      - run: golangci-lint run
+      - run: go run -mod=vendor ./tools/claimslint .
   vet:
     name: vet
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go vet ./...
+      - run: go vet -mod=vendor ./...
   arch-check:
     name: arch-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go run ./tools/archcheck
+      - run: go run -mod=vendor ./tools/archcheck
   unit-race:
     name: unit-race
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go test -race ./...
+      - run: go test -mod=vendor -race ./...
       - name: Retain failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
@@ -45,40 +49,55 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go test -race ./internal/protocol/...
+      - run: go test -mod=vendor -race ./internal/protocol/...
   authz-race:
     name: authz-race
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go test -race ./internal/auth/...
+      - run: go test -mod=vendor -race ./internal/auth/...
   index-race:
     name: index-race
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go test -race ./internal/filter/index/...
+      - run: go test -mod=vendor -race ./internal/filter/index/...
   docs-status-lint:
     name: docs-status-lint
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go run ./tools/docsstatus
+      - run: go run -mod=vendor ./tools/docsstatus ./docs
+      - run: go run -mod=vendor ./tools/claimslint .
   metrics-contract:
     name: metrics-contract
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go test ./internal/observability/...
+      - run: go test -mod=vendor ./internal/observability/...
   deps-audit:
     name: deps-audit
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - run: go test -mod=vendor ./tools/depsaudit
+      - run: go run -mod=vendor ./tools/depsaudit -root .
       - run: govulncheck ./...
   trace-check:
     name: trace-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - run: go test ./...
+      - run: go test -mod=vendor ./tools/tracecheck
+      - run: go run -mod=vendor ./tools/tracecheck -root .
+  macos-correctness:
+    name: macos-correctness
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - run: GO=go ./scripts/check-format.sh
+      - run: ./scripts/check-determinism.sh
+      - run: go vet -mod=vendor ./...
+      - run: go test -mod=vendor -race -shuffle=on ./...
+      - run: go run -mod=vendor ./tools/archcheck
+      - run: go run -mod=vendor ./tools/cicontract -root .

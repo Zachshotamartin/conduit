@@ -29,10 +29,10 @@ const (
 )
 
 type expectedViolation struct {
-	rule    string
-	pkg     string
-	target  string
-	reason  string
+	rule   string
+	pkg    string
+	target string
+	reason string
 }
 
 func TestCheckModuleReportsEveryArchitectureBoundary(t *testing.T) {

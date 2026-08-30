@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 480
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./internal/protocol/...
       - name: Retain fuzz corpora
         uses: actions/upload-artifact@v4
         with:
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 480
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./internal/queue/...
       - name: Retain soak captures
         uses: actions/upload-artifact@v4
         with:
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 480
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./test/fault/...
       - name: Retain chaos captures
         uses: actions/upload-artifact@v4
         with:
@@ -50,16 +50,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 480
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./internal/bus/nats/...
   bench-regression:
     name: bench-regression
     runs-on: ubuntu-latest
     timeout-minutes: 480
     steps:
-      - run: "true"
+      - run: go test -mod=vendor -bench=. ./...
   index-property-extended:
     name: index-property-extended
     runs-on: ubuntu-latest
     timeout-minutes: 480
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./internal/filter/...

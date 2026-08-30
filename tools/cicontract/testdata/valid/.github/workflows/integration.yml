@@ -19,25 +19,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./test/conformance/...
   integration-nats:
     name: integration-nats
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./internal/bus/nats/...
   integration-postgres:
     name: integration-postgres
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./internal/datasource/postgres/...
   socket-hostile:
     name: socket-hostile
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - run: "true"
+      - run: go test -mod=vendor ./test/hostile/...
       - name: Retain integration failure evidence
         if: failure()
         uses: actions/upload-artifact@v4
