@@ -14,7 +14,7 @@ func TestFakeRejectsNegativeAdvanceWithoutChangingState(t *testing.T) {
 	start := time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC)
 	fake := conduitclock.NewFake(start)
 	fired := false
-	fake.Schedule(0, func() {
+	fake.Schedule(0, func(time.Time) {
 		fired = true
 	})
 
@@ -43,15 +43,20 @@ func TestFakeRejectsNegativeAdvanceWithoutChangingState(t *testing.T) {
 func TestFakeDrainsTimersScheduledByCallbackThroughSameTarget(t *testing.T) {
 	t.Parallel()
 
-	fake := conduitclock.NewFake(time.Unix(0, 0).UTC())
-	var got []string
-	fake.Schedule(time.Second, func() {
-		got = append(got, "outer")
-		fake.Schedule(0, func() {
-			got = append(got, "inner")
+	start := time.Unix(0, 0).UTC()
+	fake := conduitclock.NewFake(start)
+	type firing struct {
+		name string
+		at   time.Time
+	}
+	var got []firing
+	fake.Schedule(time.Second, func(now time.Time) {
+		got = append(got, firing{name: "outer", at: now})
+		fake.Schedule(0, func(innerNow time.Time) {
+			got = append(got, firing{name: "inner", at: innerNow})
 		})
-		cancelled := fake.Schedule(0, func() {
-			got = append(got, "cancelled")
+		cancelled := fake.Schedule(0, func(cancelledNow time.Time) {
+			got = append(got, firing{name: "cancelled", at: cancelledNow})
 		})
 		if !fake.Cancel(cancelled) {
 			t.Error("Cancel(timer scheduled by callback) = false, want true")
@@ -59,8 +64,11 @@ func TestFakeDrainsTimersScheduledByCallbackThroughSameTarget(t *testing.T) {
 	})
 
 	fake.Advance(time.Second)
-	if want := []string{"outer", "inner"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("callback sequence = %v, want %v", got, want)
+	if want := []firing{
+		{name: "outer", at: start.Add(time.Second)},
+		{name: "inner", at: start.Add(time.Second)},
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("callback sequence = %#v, want %#v", got, want)
 	}
 }
 
@@ -73,14 +81,7 @@ func TestRealClockSupportsInjectionAndExactCancellation(t *testing.T) {
 		t.Fatal("Real.Now() returned the zero time")
 	}
 
-	wake := injected.After(time.Hour)
-	select {
-	case got := <-wake:
-		t.Fatalf("Real.After(1h) fired immediately at %s", got)
-	default:
-	}
-
-	handle := injected.Schedule(time.Hour, func() {
+	handle := injected.Schedule(time.Hour, func(time.Time) {
 		t.Error("cancelled real-clock callback fired")
 	})
 	if !injected.Cancel(handle) {
@@ -94,7 +95,7 @@ func TestRealClockSupportsInjectionAndExactCancellation(t *testing.T) {
 	}
 
 	other := conduitclock.NewReal()
-	otherHandle := other.Schedule(time.Hour, func() {
+	otherHandle := other.Schedule(time.Hour, func(time.Time) {
 		t.Error("cancelled foreign real-clock callback fired")
 	})
 	if injected.Cancel(otherHandle) {
@@ -109,7 +110,7 @@ func TestRealZeroValueIsReadyForUse(t *testing.T) {
 	t.Parallel()
 
 	var realClock conduitclock.Real
-	handle := realClock.Schedule(time.Hour, func() {
+	handle := realClock.Schedule(time.Hour, func(time.Time) {
 		t.Error("cancelled zero-value Real callback fired")
 	})
 	if !realClock.Cancel(handle) {

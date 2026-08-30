@@ -14,11 +14,10 @@ var ErrNegativeAdvance = errors.New("clock: negative advance")
 
 // Clock is the sole time source used by Conduit code. Implementations own
 // both time reads and timer creation so callers never depend directly on the
-// process wall clock.
+// process wall clock. Scheduled callbacks must be non-blocking.
 type Clock interface {
 	Now() time.Time
-	After(d time.Duration) <-chan time.Time
-	Schedule(d time.Duration, fn func()) TimerHandle
+	Schedule(d time.Duration, fn func(now time.Time)) TimerHandle
 	Cancel(h TimerHandle) bool
 }
 
@@ -59,14 +58,10 @@ func (*Real) Now() time.Time {
 	return time.Now()
 }
 
-// After returns a channel that receives the wall-clock deadline once.
-func (*Real) After(d time.Duration) <-chan time.Time {
-	return time.After(d)
-}
-
 // Schedule arranges for fn to run once after d. Wall-clock callbacks run in
-// their own goroutine, matching time.AfterFunc semantics.
-func (r *Real) Schedule(d time.Duration, fn func()) TimerHandle {
+// their own goroutine, matching time.AfterFunc semantics, and receive the
+// current firing instant. Callbacks must be non-blocking.
+func (r *Real) Schedule(d time.Duration, fn func(now time.Time)) TimerHandle {
 	if fn == nil {
 		panic("clock: nil callback")
 	}
@@ -83,7 +78,7 @@ func (r *Real) Schedule(d time.Duration, fn func()) TimerHandle {
 		delete(r.timers, h.id)
 		r.mu.Unlock()
 
-		fn()
+		fn(time.Now())
 	})
 	r.timers[h.id] = timer
 	r.mu.Unlock()
@@ -129,8 +124,8 @@ func (r *Real) nextHandleIDLocked() uint64 {
 // only through Advance. Scheduled callbacks run synchronously in deadline
 // order during Advance; equal deadlines retain insertion order.
 //
-// Scheduled callbacks may call Now, After, Schedule, and Cancel. They must
-// not call Advance recursively.
+// Scheduled callbacks may call Now, Schedule, and Cancel. They must be
+// non-blocking and must not call Advance recursively.
 type Fake struct {
 	advanceMu sync.Mutex
 	mu        sync.Mutex
@@ -160,20 +155,11 @@ func (f *Fake) Now() time.Time {
 	return f.now
 }
 
-// After returns a buffered one-shot channel. The send occurs synchronously
-// when an explicit Advance reaches the deadline, so it never blocks Advance.
-func (f *Fake) After(d time.Duration) <-chan time.Time {
-	ch := make(chan time.Time, 1)
-	f.Schedule(d, func() {
-		ch <- f.Now()
-	})
-	return ch
-}
-
 // Schedule adds a one-shot callback. Non-positive durations are scheduled
 // at the current fake instant and fire on the next Advance, including
-// Advance(0); scheduling alone never fires a callback.
-func (f *Fake) Schedule(d time.Duration, fn func()) TimerHandle {
+// Advance(0); scheduling alone never fires a callback. The callback receives
+// its exact scheduled deadline and must be non-blocking.
+func (f *Fake) Schedule(d time.Duration, fn func(now time.Time)) TimerHandle {
 	if fn == nil {
 		panic("clock: nil callback")
 	}
@@ -254,7 +240,7 @@ func (f *Fake) Advance(d time.Duration) {
 		fn := next.fn
 
 		f.mu.Unlock()
-		fn()
+		fn(next.deadline)
 		f.mu.Lock()
 	}
 	f.now = target
@@ -274,7 +260,7 @@ type fakeTimer struct {
 	handle   TimerHandle
 	deadline time.Time
 	order    uint64
-	fn       func()
+	fn       func(time.Time)
 	index    int
 }
 

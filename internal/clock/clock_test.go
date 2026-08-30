@@ -2,13 +2,45 @@ package clock_test
 
 import (
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
 	conduitclock "github.com/Zachshotamartin/conduit/internal/clock"
 )
 
-var _ conduitclock.Clock = (*conduitclock.Fake)(nil)
+type architectureClock interface {
+	Now() time.Time
+	Schedule(d time.Duration, fn func(now time.Time)) conduitclock.TimerHandle
+	Cancel(h conduitclock.TimerHandle) bool
+}
+
+var (
+	_ architectureClock  = (conduitclock.Clock)(nil)
+	_ conduitclock.Clock = (architectureClock)(nil)
+	_ conduitclock.Clock = (*conduitclock.Fake)(nil)
+	_ conduitclock.Clock = (*conduitclock.Real)(nil)
+)
+
+func TestClockInterfaceExactlyMatchesArchitectureContract(t *testing.T) {
+	t.Parallel()
+
+	got := reflect.TypeOf((*conduitclock.Clock)(nil)).Elem()
+	want := reflect.TypeOf((*architectureClock)(nil)).Elem()
+	if got.NumMethod() != 3 {
+		t.Fatalf("Clock method count = %d, want exactly 3 (Now, Schedule, Cancel)", got.NumMethod())
+	}
+	for _, name := range []string{"Now", "Schedule", "Cancel"} {
+		gotMethod, gotOK := got.MethodByName(name)
+		wantMethod, wantOK := want.MethodByName(name)
+		if !gotOK || !wantOK {
+			t.Fatalf("Clock method %s presence: got=%t want=%t", name, gotOK, wantOK)
+		}
+		if gotMethod.Type != wantMethod.Type {
+			t.Fatalf("Clock.%s signature = %s, want %s", name, gotMethod.Type, wantMethod.Type)
+		}
+	}
+}
 
 func TestFakeClockImplementsInjectedClock(t *testing.T) {
 	t.Parallel()
@@ -42,43 +74,44 @@ func TestAdvanceMovesTimeOnlyWhenExplicitlyRequested(t *testing.T) {
 	}
 }
 
-func TestScheduledCallbacksFireAtDeadlinesInDeterministicOrder(t *testing.T) {
+func TestScheduledCallbacksReceiveDeadlinesInDeterministicOrder(t *testing.T) {
 	t.Parallel()
 
 	start := time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC)
 	fake := conduitclock.NewFake(start)
 	type firing struct {
-		name string
-		at   time.Time
+		name       string
+		argument   time.Time
+		currentNow time.Time
 	}
 	var got []firing
 
-	scheduleInjectedClock(fake, 3*time.Second, func() {
-		got = append(got, firing{name: "third", at: fake.Now()})
+	scheduleInjectedClock(fake, 3*time.Second, func(now time.Time) {
+		got = append(got, firing{name: "third", argument: now, currentNow: fake.Now()})
 	})
-	scheduleInjectedClock(fake, time.Second, func() {
-		got = append(got, firing{name: "first", at: fake.Now()})
+	scheduleInjectedClock(fake, time.Second, func(now time.Time) {
+		got = append(got, firing{name: "first", argument: now, currentNow: fake.Now()})
 	})
-	scheduleInjectedClock(fake, 2*time.Second, func() {
-		got = append(got, firing{name: "second", at: fake.Now()})
+	scheduleInjectedClock(fake, 2*time.Second, func(now time.Time) {
+		got = append(got, firing{name: "second", argument: now, currentNow: fake.Now()})
 	})
 
 	assertFirings(t, got, []firing(nil))
 	fake.Advance(999 * time.Millisecond)
 	assertFirings(t, got, []firing(nil))
 
-	fake.Advance(1 * time.Millisecond)
+	fake.Advance(time.Millisecond)
 	assertFirings(t, got, []firing{
-		{name: "first", at: start.Add(time.Second)},
+		{name: "first", argument: start.Add(time.Second), currentNow: start.Add(time.Second)},
 	})
 
-	fake.Advance(2 * time.Second)
+	fake.Advance(7 * time.Second)
 	assertFirings(t, got, []firing{
-		{name: "first", at: start.Add(time.Second)},
-		{name: "second", at: start.Add(2 * time.Second)},
-		{name: "third", at: start.Add(3 * time.Second)},
+		{name: "first", argument: start.Add(time.Second), currentNow: start.Add(time.Second)},
+		{name: "second", argument: start.Add(2 * time.Second), currentNow: start.Add(2 * time.Second)},
+		{name: "third", argument: start.Add(3 * time.Second), currentNow: start.Add(3 * time.Second)},
 	})
-	if gotNow, wantNow := fake.Now(), start.Add(3*time.Second); !gotNow.Equal(wantNow) {
+	if gotNow, wantNow := fake.Now(), start.Add(8*time.Second); !gotNow.Equal(wantNow) {
 		t.Fatalf("Now() after firing callbacks = %s, want final advance target %s", gotNow, wantNow)
 	}
 }
@@ -86,11 +119,15 @@ func TestScheduledCallbacksFireAtDeadlinesInDeterministicOrder(t *testing.T) {
 func TestScheduledCallbacksUseStableInsertionOrderForEqualDeadlines(t *testing.T) {
 	t.Parallel()
 
-	fake := conduitclock.NewFake(time.Unix(0, 0).UTC())
+	start := time.Unix(0, 0).UTC()
+	fake := conduitclock.NewFake(start)
 	var got []int
 	for i := 0; i < 8; i++ {
 		i := i
-		fake.Schedule(time.Second, func() {
+		fake.Schedule(time.Second, func(now time.Time) {
+			if want := start.Add(time.Second); !now.Equal(want) {
+				t.Errorf("callback %d timestamp = %s, want %s", i, now, want)
+			}
 			got = append(got, i)
 		})
 	}
@@ -106,7 +143,7 @@ func TestCancelPreventsScheduledCallbackAndReportsHandleState(t *testing.T) {
 
 	fake := conduitclock.NewFake(time.Unix(0, 0).UTC())
 	fired := false
-	handle := fake.Schedule(time.Second, func() {
+	handle := fake.Schedule(time.Second, func(time.Time) {
 		fired = true
 	})
 
@@ -132,10 +169,10 @@ func TestTimerHandleCannotCancelAnotherTimer(t *testing.T) {
 	firstFired := false
 	secondFired := false
 
-	firstHandle := firstClock.Schedule(time.Second, func() {
+	firstHandle := firstClock.Schedule(time.Second, func(time.Time) {
 		firstFired = true
 	})
-	secondHandle := secondClock.Schedule(time.Second, func() {
+	secondHandle := secondClock.Schedule(time.Second, func(time.Time) {
 		secondFired = true
 	})
 
@@ -158,7 +195,7 @@ func TestCancelAfterFireReportsTimerNoLongerPending(t *testing.T) {
 
 	fake := conduitclock.NewFake(time.Unix(0, 0).UTC())
 	fireCount := 0
-	handle := fake.Schedule(time.Second, func() {
+	handle := fake.Schedule(time.Second, func(time.Time) {
 		fireCount++
 	})
 
@@ -175,54 +212,54 @@ func TestCancelAfterFireReportsTimerNoLongerPending(t *testing.T) {
 	}
 }
 
-func TestAfterFiresOnlyOnAdvanceWithScheduledTimestamp(t *testing.T) {
+func TestFakeClockConcurrentScheduleCancelAdvanceAndRead(t *testing.T) {
 	t.Parallel()
 
-	start := time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC)
-	fake := conduitclock.NewFake(start)
-	wake := afterInjectedClock(fake, 5*time.Second)
-
-	assertNoTimeAvailable(t, wake)
-	fake.Advance(5*time.Second - time.Nanosecond)
-	assertNoTimeAvailable(t, wake)
-
-	fake.Advance(time.Nanosecond)
-	select {
-	case got := <-wake:
-		if want := start.Add(5 * time.Second); !got.Equal(want) {
-			t.Fatalf("After timestamp = %s, want deadline %s", got, want)
-		}
-	default:
-		t.Fatal("After channel did not fire synchronously when explicit Advance reached its deadline")
+	const timerCount = 64
+	fake := conduitclock.NewFake(time.Unix(0, 0).UTC())
+	handles := make([]conduitclock.TimerHandle, timerCount)
+	var firedMu sync.Mutex
+	fired := 0
+	var scheduleGroup sync.WaitGroup
+	for index := range handles {
+		index := index
+		scheduleGroup.Add(1)
+		go func() {
+			defer scheduleGroup.Done()
+			handles[index] = fake.Schedule(time.Second, func(time.Time) {
+				firedMu.Lock()
+				fired++
+				firedMu.Unlock()
+			})
+			_ = fake.Now()
+		}()
 	}
+	scheduleGroup.Wait()
 
-	assertNoTimeAvailable(t, wake)
+	for index := 0; index < timerCount; index += 2 {
+		if !fake.Cancel(handles[index]) {
+			t.Fatalf("Cancel(handle %d) = false, want true", index)
+		}
+	}
+	fake.Advance(time.Second)
+
+	firedMu.Lock()
+	defer firedMu.Unlock()
+	if fired != timerCount/2 {
+		t.Fatalf("concurrent timer fire count = %d, want %d", fired, timerCount/2)
+	}
 }
 
 func readInjectedClock(c conduitclock.Clock) time.Time {
 	return c.Now()
 }
 
-func afterInjectedClock(c conduitclock.Clock, d time.Duration) <-chan time.Time {
-	return c.After(d)
-}
-
-func scheduleInjectedClock(c conduitclock.Clock, d time.Duration, fn func()) conduitclock.TimerHandle {
+func scheduleInjectedClock(c conduitclock.Clock, d time.Duration, fn func(time.Time)) conduitclock.TimerHandle {
 	return c.Schedule(d, fn)
 }
 
 func cancelInjectedClock(c conduitclock.Clock, h conduitclock.TimerHandle) bool {
 	return c.Cancel(h)
-}
-
-func assertNoTimeAvailable(t *testing.T, ch <-chan time.Time) {
-	t.Helper()
-
-	select {
-	case got := <-ch:
-		t.Fatalf("unexpected timer event at %s before explicit advance reached the deadline", got)
-	default:
-	}
 }
 
 func assertFirings(t *testing.T, got, want any) {
