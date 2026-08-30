@@ -42,7 +42,9 @@ Every deliverable has exactly one of four statuses:
 A package, type, stub, or happy-path unit test is never completion. A gate is
 accepted only when its user-visible flow, failure behavior, security cases,
 documentation, and the complete §X.9 acceptance checklist pass together in
-CI. R0 is `in progress` on `gate/r0`; R1 through R10 remain `planned`.
+CI. R0 is `in progress` on `gate/r0`; R1 is provisionally `in progress` on
+`gate/r1` under ADR-0013; R2 through R10 remain `planned`. Neither active gate
+is accepted and no capability claim is earned.
 
 ### 1.2 Gates and the capability each unlocks
 
@@ -106,12 +108,14 @@ No other reordering is permitted without an ADR.
 The public GitHub repository, this documentation set, the fourteen accepted
 ADRs, the exact Go toolchain pin, repository-local developer bootstrap,
 deterministic clock and error foundations, configuration contracts, and R0
-checks/workflow scaffolding are in progress on `gate/r0`. No gateway listener
-or GraphQL product behavior exists on this gate branch; no gate is accepted
-and no benchmark claim is earned. The owner-authorized early publication,
-successful branch-protection read-back, and immediate publication audit are
-recorded under `docs/evidence/r0/` and ADR-0014. R0 still requires independent
-PR approval and a schedule-triggered nightly run.
+checks/workflow scaffolding are in progress on `gate/r0`. R1 test-first
+implementation is provisionally in progress on the stacked `gate/r1` branch
+under ADR-0013. No gateway listener or completed GraphQL product behavior
+exists; no gate is accepted and no benchmark claim is earned. The
+owner-authorized early publication, successful branch-protection read-back,
+and immediate publication audit are recorded under `docs/evidence/r0/` and
+ADR-0014. R0 still requires independent PR approval and a schedule-triggered
+nightly run.
 
 ### 2.2 The current honest product claim
 
@@ -591,7 +595,7 @@ records R10 as their terminal owner.
 
 ## 6. R1 — Single-Node Queries and Mutations Against Real Data Sources
 
-**Status:** planned.
+**Status:** in progress, provisional under ADR-0013.
 
 **Effort range:** 4–6 focused weeks.
 

@@ -34,8 +34,10 @@ change any gate's lifecycle status or earn any release claim.
 
 The following controls are binding:
 
-- R0 remains `in progress`, and R1 through R10 remain `planned`, until their
-  normative acceptance conditions actually pass.
+- R0 remains `in progress`. A provisionally active successor gate is also
+  marked `in progress` so dependency and status audits describe the code that
+  exists, while every untouched successor remains `planned`. No gate becomes
+  `accepted` until its normative acceptance conditions actually pass.
 - No stacked gate pull request may be merged or represented as accepted while
   a predecessor is unaccepted.
 - Every branch reruns all inherited required checks in addition to its own
