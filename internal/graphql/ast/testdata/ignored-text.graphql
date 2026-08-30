@@ -1,0 +1,5 @@
+# { [ ( comments do not contribute tokens or depth
+query Q,
+{
+  field(arg: "{ [ ( inside a string")
+}
