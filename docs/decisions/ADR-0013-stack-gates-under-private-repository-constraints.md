@@ -42,6 +42,10 @@ The following controls are binding:
   a predecessor is unaccepted.
 - Every branch reruns all inherited required checks in addition to its own
   gate-specific checks.
+- Dependency policy recognizes an `in progress` gate so its reviewed runtime
+  dependencies may be introduced. Traceability requires the complete named
+  test-row set before a gate becomes `accepted`, while tests for an active
+  gate appear ticket-by-ticket immediately before their implementations.
 - Each pull request records the exact unresolved predecessor conditions and
   labels its results as provisional.
 - The normal ticket order is preserved. Optional R4/R5 parallelism is not used
