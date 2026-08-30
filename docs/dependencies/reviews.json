@@ -3,6 +3,13 @@
   "vendor_tree_digest_algorithm": "sha256-framed-tree-v1",
   "reviews": [
     {
+      "module": "github.com/vektah/gqlparser/v2",
+      "version": "v2.5.36",
+      "status": "accepted",
+      "review_file": "github.com-vektah-gqlparser-v2-v2.5.36.md",
+      "vendor_tree_sha256": "sha256:4166c3e7213596f09ce262672b93f36e4473dbc60b3b964684af2dcc42a0aa13"
+    },
+    {
       "module": "gopkg.in/yaml.v3",
       "version": "v3.0.1",
       "status": "accepted",
@@ -12,10 +19,58 @@
   ],
   "transitive_disclosures": [
     {
+      "module": "github.com/creack/pty",
+      "version": "v1.1.9",
+      "relationship": "upstream-test-only",
+      "review_file": "github.com-vektah-gqlparser-v2-v2.5.36.md"
+    },
+    {
+      "module": "github.com/davecgh/go-spew",
+      "version": "v1.1.1",
+      "relationship": "upstream-test-only",
+      "review_file": "github.com-vektah-gqlparser-v2-v2.5.36.md"
+    },
+    {
+      "module": "github.com/kr/pretty",
+      "version": "v0.1.0",
+      "relationship": "upstream-test-only",
+      "review_file": "github.com-vektah-gqlparser-v2-v2.5.36.md"
+    },
+    {
+      "module": "github.com/kr/text",
+      "version": "v0.2.0",
+      "relationship": "upstream-test-only",
+      "review_file": "github.com-vektah-gqlparser-v2-v2.5.36.md"
+    },
+    {
+      "module": "github.com/pmezard/go-difflib",
+      "version": "v1.0.0",
+      "relationship": "upstream-test-only",
+      "review_file": "github.com-vektah-gqlparser-v2-v2.5.36.md"
+    },
+    {
+      "module": "github.com/stretchr/testify",
+      "version": "v1.11.1",
+      "relationship": "upstream-test-only",
+      "review_file": "github.com-vektah-gqlparser-v2-v2.5.36.md"
+    },
+    {
+      "module": "go.yaml.in/yaml/v3",
+      "version": "v3.0.4",
+      "relationship": "upstream-test-only",
+      "review_file": "github.com-vektah-gqlparser-v2-v2.5.36.md"
+    },
+    {
       "module": "gopkg.in/check.v1",
       "version": "v0.0.0-20161208181325-20d25e280405",
       "relationship": "upstream-test-only",
       "review_file": "gopkg.in-yaml.v3-v3.0.1.md"
+    },
+    {
+      "module": "gopkg.in/check.v1",
+      "version": "v1.0.0-20190902080502-41f04d3bba15",
+      "relationship": "upstream-test-only",
+      "review_file": "github.com-vektah-gqlparser-v2-v2.5.36.md"
     }
   ]
 }
