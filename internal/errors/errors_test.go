@@ -3,6 +3,7 @@ package errors_test
 import (
 	"encoding/json"
 	stderrors "errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -226,5 +227,72 @@ func TestWrapUnknownNilIsNil(t *testing.T) {
 
 	if got := conduiterrors.WrapUnknown(nil); got != nil {
 		t.Fatalf("WrapUnknown(nil) = %v, want nil", got)
+	}
+}
+
+func TestWrapUnknownMakesAnUnsafeOuterWrapperClientSafe(t *testing.T) {
+	t.Parallel()
+
+	const canary = "secret query text and stack frame"
+	inner := conduiterrors.Wrap(conduiterrors.SourceTimeout, stderrors.New("diagnostic cause"))
+	outer := fmt.Errorf("%s: %w", canary, inner)
+
+	got := conduiterrors.WrapUnknown(outer)
+	if got == outer {
+		t.Fatal("WrapUnknown returned an unsafe outer wrapper unchanged")
+	}
+	if strings.Contains(got.Error(), canary) {
+		t.Fatalf("WrapUnknown leaked outer wrapper text: %q", got.Error())
+	}
+	if !stderrors.Is(got, outer) {
+		t.Fatal("WrapUnknown discarded the outer diagnostic chain")
+	}
+	var typed *conduiterrors.Error
+	if !stderrors.As(got, &typed) {
+		t.Fatal("errors.As did not find the safe *errors.Error")
+	}
+	if typed.Category() != conduiterrors.SourceTimeout {
+		t.Fatalf("Category() = %q, want %q", typed.Category(), conduiterrors.SourceTimeout)
+	}
+}
+
+func TestErrorJSONRoundTripsEveryCategory(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range categoryCases {
+		tc := tc
+		t.Run(string(tc.category), func(t *testing.T) {
+			t.Parallel()
+
+			wire, err := json.Marshal(conduiterrors.New(tc.category))
+			if err != nil {
+				t.Fatalf("Marshal() error = %v", err)
+			}
+			var decoded conduiterrors.Error
+			if err := json.Unmarshal(wire, &decoded); err != nil {
+				t.Fatalf("Unmarshal(%s) error = %v", wire, err)
+			}
+			if decoded.Category() != tc.category {
+				t.Fatalf("round-trip Category() = %q, want %q", decoded.Category(), tc.category)
+			}
+			if decoded.SafeMessage() != tc.safeMessage {
+				t.Fatalf("round-trip SafeMessage() = %q, want %q", decoded.SafeMessage(), tc.safeMessage)
+			}
+		})
+	}
+}
+
+func TestErrorJSONRejectsUnknownOrNoncanonicalData(t *testing.T) {
+	t.Parallel()
+
+	for _, input := range []string{
+		`{"category":"invented","message":"internal error"}`,
+		`{"category":"source_timeout","message":"secret upstream response"}`,
+		`{"category":"source_timeout","message":"data source timed out","extra":true}`,
+	} {
+		var decoded conduiterrors.Error
+		if err := json.Unmarshal([]byte(input), &decoded); err == nil {
+			t.Errorf("Unmarshal(%s) succeeded, want fail-closed rejection", input)
+		}
 	}
 }
