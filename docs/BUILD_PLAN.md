@@ -103,7 +103,7 @@ No other reordering is permitted without an ADR.
 
 ### 2.1 What exists
 
-The private GitHub repository, this documentation set, the eleven accepted
+The private GitHub repository, this documentation set, the twelve accepted
 ADRs, the exact Go toolchain pin, repository-local developer bootstrap,
 deterministic clock and error foundations, configuration contracts, and R0
 checks/workflow scaffolding are in progress on `gate/r0`. No gateway
