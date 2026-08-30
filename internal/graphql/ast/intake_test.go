@@ -272,6 +272,26 @@ func TestUNIT003_IntakeParsesDeterministicFixture(t *testing.T) {
 	}
 }
 
+func TestUNIT003_OperationReportsParsedDocumentShape(t *testing.T) {
+	t.Parallel()
+
+	document := []byte(`
+		query First { viewer { ...ViewerFields } }
+		query Second { viewer { id } }
+		fragment ViewerFields on Viewer { id name }
+	`)
+	operation, err := graphqlast.Intake(document, graphqlast.IntakeLimits{}, nil)
+	if err != nil {
+		t.Fatalf("Intake() error = %v", err)
+	}
+	if got := operation.OperationCount(); got != 2 {
+		t.Fatalf("OperationCount() = %d, want 2", got)
+	}
+	if got := operation.FragmentCount(); got != 1 {
+		t.Fatalf("FragmentCount() = %d, want 1", got)
+	}
+}
+
 func FuzzIntake(f *testing.F) {
 	f.Fuzz(func(t *testing.T, document []byte) {
 		operation, err := graphqlast.Intake(
