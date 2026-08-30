@@ -43,6 +43,12 @@ configuration parser in `internal/config`.
 - The vendored yaml.v3 tree is 360 KiB on disk and contains 16 files. It is
   pure Go: no C, assembly, cgo directive, native library, subprocess, or
   runtime service is introduced.
+- `reviews.json` records the accepted review and the deterministic
+  `sha256-framed-tree-v1` digest
+  `sha256:8fd099dfecbcd82abaf9556bde54751559cae22ab0b7da8ef411e6e891d01739`
+  over every sorted vendored path, permission mode, and file body. It also
+  records the upstream-only `gopkg.in/check.v1` dependency and its exact
+  version as a non-linked transitive disclosure.
 - Removal difficulty is low to moderate. yaml.v3 types are contained within
   `internal/config/load.go`; Conduit's public config tree, validation errors,
   precedence, and CLI do not expose them. A replacement must reproduce the

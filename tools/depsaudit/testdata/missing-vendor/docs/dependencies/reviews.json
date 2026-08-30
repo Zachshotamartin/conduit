@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "vendor_tree_digest_algorithm": "sha256-framed-tree-v1",
+  "reviews": [
+    {
+      "module": "github.com/coder/websocket",
+      "version": "v0.0.0",
+      "status": "accepted",
+      "review_file": "fixture-review.md",
+      "vendor_tree_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "transitive_disclosures": []
+}

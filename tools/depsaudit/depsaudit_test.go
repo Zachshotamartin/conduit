@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -45,8 +47,9 @@ func TestAuditAcceptsApprovedVendoredRuntimeAndReviewedTestDependency(t *testing
 	t.Parallel()
 
 	got, err := Audit(context.Background(), AuditOptions{
-		ModuleRoot:     filepath.Join("testdata", "valid"),
-		GateStatusPath: filepath.Join("testdata", "valid", "docs", "gate-status.json"),
+		ModuleRoot:               filepath.Join("testdata", "valid"),
+		GateStatusPath:           filepath.Join("testdata", "valid", "docs", "gate-status.json"),
+		allowFixtureReplacements: true,
 	})
 	if err != nil {
 		t.Fatalf("Audit(valid): %v", err)
@@ -56,12 +59,341 @@ func TestAuditAcceptsApprovedVendoredRuntimeAndReviewedTestDependency(t *testing
 	}
 }
 
+func TestAuditRejectsReplaceBeforeLoadingThePackageGraph(t *testing.T) {
+	t.Parallel()
+
+	root := copyDependencyFixture(t, "valid")
+	if err := os.Remove(filepath.Join(root, "vendor", "modules.txt")); err != nil {
+		t.Fatalf("remove vendor manifest: %v", err)
+	}
+	_, err := Audit(context.Background(), AuditOptions{
+		ModuleRoot:     root,
+		GateStatusPath: filepath.Join(root, "docs", "gate-status.json"),
+	})
+	assertAuditErrorContains(t, err, "replace directive")
+	if strings.Contains(err.Error(), "package graph") || strings.Contains(err.Error(), "vendor") {
+		t.Fatalf("replace rejection did not precede graph loading: %v", err)
+	}
+}
+
+func TestReplaceDetectionUsesTheGoParserForSingleAndBlockForms(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		directive string
+	}{
+		{name: "single", directive: "replace example.com/dependency => ./dependency\n"},
+		{name: "block", directive: "replace (\n\texample.com/dependency => ./dependency\n)\n"},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := t.TempDir()
+			goMod := "module example.com/replacetest\n\ngo 1.23.0\n\n" + test.directive
+			if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte(goMod), 0o644); err != nil {
+				t.Fatalf("write go.mod: %v", err)
+			}
+			err := rejectGoModReplacements(context.Background(), root)
+			assertAuditErrorContains(t, err, "replace directive")
+		})
+	}
+}
+
+func TestVendoredTreeDigestDetectsSourceAndLicenseChanges(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		path string
+	}{
+		{name: "source", path: filepath.Join("vendor", "github.com", "coder", "websocket", "websocket.go")},
+		{name: "license", path: filepath.Join("vendor", "github.com", "coder", "websocket", "LICENSE")},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := copyDependencyFixture(t, "valid")
+			path := filepath.Join(root, test.path)
+			contents, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read vendored fixture file: %v", err)
+			}
+			contents = append(contents, []byte("\nchanged after review\n")...)
+			if err := os.WriteFile(path, contents, 0o644); err != nil {
+				t.Fatalf("mutate vendored fixture file: %v", err)
+			}
+
+			findings, err := auditDependencyFixture(root)
+			if err != nil {
+				t.Fatalf("Audit(modified vendor tree): %v", err)
+			}
+			assertAuditFinding(t, findings, "vendor-tree-digest-mismatch", "github.com/coder/websocket", "")
+		})
+	}
+}
+
+func TestDependencyReviewEntriesFailClosed(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		mutate   func(*dependencyReviewManifest)
+		wantKind string
+		module   string
+	}{
+		{
+			name: "missing review",
+			mutate: func(manifest *dependencyReviewManifest) {
+				manifest.Reviews = manifest.Reviews[1:]
+			},
+			wantKind: "missing-review",
+			module:   "example.com/testhelper",
+		},
+		{
+			name: "mismatched version",
+			mutate: func(manifest *dependencyReviewManifest) {
+				manifest.Reviews[0].Version = "v9.9.9"
+			},
+			wantKind: "review-version-mismatch",
+			module:   "example.com/testhelper",
+		},
+		{
+			name: "mismatched digest",
+			mutate: func(manifest *dependencyReviewManifest) {
+				manifest.Reviews[0].VendorTreeSHA256 = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+			},
+			wantKind: "vendor-tree-digest-mismatch",
+			module:   "example.com/testhelper",
+		},
+		{
+			name: "duplicate review",
+			mutate: func(manifest *dependencyReviewManifest) {
+				manifest.Reviews = append(manifest.Reviews, manifest.Reviews[0])
+			},
+			wantKind: "duplicate-review",
+			module:   "example.com/testhelper",
+		},
+		{
+			name: "extra unknown module review",
+			mutate: func(manifest *dependencyReviewManifest) {
+				extra := manifest.Reviews[0]
+				extra.Module = "unknown.example/dependency"
+				manifest.Reviews = append(manifest.Reviews, extra)
+			},
+			wantKind: "extra-review",
+			module:   "unknown.example/dependency",
+		},
+		{
+			name: "unaccepted review",
+			mutate: func(manifest *dependencyReviewManifest) {
+				manifest.Reviews[0].Status = "pending"
+			},
+			wantKind: "malformed-review",
+			module:   "example.com/testhelper",
+		},
+		{
+			name: "path escape",
+			mutate: func(manifest *dependencyReviewManifest) {
+				manifest.Reviews[0].ReviewFile = "../../outside.md"
+			},
+			wantKind: "malformed-review",
+			module:   "example.com/testhelper",
+		},
+		{
+			name: "missing review file",
+			mutate: func(manifest *dependencyReviewManifest) {
+				manifest.Reviews[0].ReviewFile = "absent.md"
+			},
+			wantKind: "malformed-review",
+			module:   "example.com/testhelper",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := copyDependencyFixture(t, "valid")
+			manifestPath := filepath.Join(root, "docs", "dependencies", "reviews.json")
+			manifest, err := readDependencyReviewManifest(manifestPath)
+			if err != nil {
+				t.Fatalf("read review manifest: %v", err)
+			}
+			test.mutate(&manifest)
+			writeDependencyReviewManifest(t, manifestPath, manifest)
+
+			findings, err := auditDependencyFixture(root)
+			if err != nil {
+				t.Fatalf("Audit(hostile review manifest): %v", err)
+			}
+			assertAuditFinding(t, findings, test.wantKind, test.module, "")
+		})
+	}
+}
+
+func TestDependencyReviewManifestRejectsUnknownAndMalformedJSON(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		mutate func(string) string
+		want   string
+	}{
+		{
+			name: "unknown entry field",
+			mutate: func(contents string) string {
+				return strings.Replace(contents, `"status": "accepted",`, `"status": "accepted", "unknown": true,`, 1)
+			},
+			want: "unknown field",
+		},
+		{
+			name: "malformed JSON",
+			mutate: func(contents string) string {
+				return strings.TrimSuffix(strings.TrimSpace(contents), "}")
+			},
+			want: "unexpected EOF",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := copyDependencyFixture(t, "valid")
+			manifestPath := filepath.Join(root, "docs", "dependencies", "reviews.json")
+			contents, err := os.ReadFile(manifestPath)
+			if err != nil {
+				t.Fatalf("read review manifest: %v", err)
+			}
+			if err := os.WriteFile(manifestPath, []byte(test.mutate(string(contents))), 0o644); err != nil {
+				t.Fatalf("write hostile review manifest: %v", err)
+			}
+			_, err = auditDependencyFixture(root)
+			assertAuditErrorContains(t, err, "decode dependency reviews", test.want)
+		})
+	}
+}
+
+func TestDependencyReviewFileRejectsIntermediateSymlinkEscape(t *testing.T) {
+	t.Parallel()
+
+	root := copyDependencyFixture(t, "valid")
+	outside := filepath.Join(root, "outside-reviews")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatalf("create outside review directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "review.md"), []byte("# Outside\n"), 0o644); err != nil {
+		t.Fatalf("create outside review file: %v", err)
+	}
+	link := filepath.Join(root, "docs", "dependencies", "escape")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatalf("create escaping review symlink: %v", err)
+	}
+	manifestPath := filepath.Join(root, "docs", "dependencies", "reviews.json")
+	manifest, err := readDependencyReviewManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("read dependency review manifest: %v", err)
+	}
+	manifest.Reviews[0].ReviewFile = "escape/review.md"
+	writeDependencyReviewManifest(t, manifestPath, manifest)
+
+	findings, err := auditDependencyFixture(root)
+	if err != nil {
+		t.Fatalf("Audit(review symlink escape): %v", err)
+	}
+	assertAuditFinding(t, findings, "malformed-review", "example.com/testhelper", "")
+}
+
+func TestTransitiveDisclosuresExactlyMatchNonReachableGoSumModules(t *testing.T) {
+	t.Parallel()
+
+	const (
+		modulePath = "example.com/upstream-test"
+		version    = "v1.2.3"
+		goSum      = "example.com/upstream-test v1.2.3 h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n" +
+			"example.com/upstream-test v1.2.3/go.mod h1:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=\n"
+	)
+	t.Run("missing deduplicated disclosure", func(t *testing.T) {
+		t.Parallel()
+
+		root := copyDependencyFixture(t, "valid")
+		if err := os.WriteFile(filepath.Join(root, "go.sum"), []byte(goSum), 0o644); err != nil {
+			t.Fatalf("write go.sum: %v", err)
+		}
+		findings, err := auditDependencyFixture(root)
+		if err != nil {
+			t.Fatalf("Audit(missing disclosure): %v", err)
+		}
+		assertAuditFinding(t, findings, "missing-disclosure", modulePath, "")
+		count := 0
+		for _, finding := range findings {
+			if finding.Kind == "missing-disclosure" && finding.Module == modulePath {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Fatalf("module and /go.mod sums produced %d missing disclosures, want 1", count)
+		}
+	})
+
+	t.Run("exact disclosure accepted", func(t *testing.T) {
+		t.Parallel()
+
+		root := copyDependencyFixture(t, "valid")
+		if err := os.WriteFile(filepath.Join(root, "go.sum"), []byte(goSum), 0o644); err != nil {
+			t.Fatalf("write go.sum: %v", err)
+		}
+		manifestPath := filepath.Join(root, "docs", "dependencies", "reviews.json")
+		manifest, err := readDependencyReviewManifest(manifestPath)
+		if err != nil {
+			t.Fatalf("read dependency reviews: %v", err)
+		}
+		manifest.TransitiveDisclosures = []transitiveDisclosure{{
+			Module: modulePath, Version: version, Relationship: "upstream-test-only", ReviewFile: "fixture-review.md",
+		}}
+		writeDependencyReviewManifest(t, manifestPath, manifest)
+		findings, err := auditDependencyFixture(root)
+		if err != nil {
+			t.Fatalf("Audit(exact disclosure): %v", err)
+		}
+		if len(findings) != 0 {
+			t.Fatalf("exact disclosure produced findings:\n%s", formatAuditFindings(findings))
+		}
+	})
+
+	t.Run("extra stale disclosure rejected", func(t *testing.T) {
+		t.Parallel()
+
+		root := copyDependencyFixture(t, "valid")
+		manifestPath := filepath.Join(root, "docs", "dependencies", "reviews.json")
+		manifest, err := readDependencyReviewManifest(manifestPath)
+		if err != nil {
+			t.Fatalf("read dependency reviews: %v", err)
+		}
+		manifest.TransitiveDisclosures = []transitiveDisclosure{{
+			Module: modulePath, Version: version, Relationship: "upstream-test-only", ReviewFile: "fixture-review.md",
+		}}
+		writeDependencyReviewManifest(t, manifestPath, manifest)
+		findings, err := auditDependencyFixture(root)
+		if err != nil {
+			t.Fatalf("Audit(extra disclosure): %v", err)
+		}
+		assertAuditFinding(t, findings, "extra-disclosure", modulePath, "")
+	})
+}
+
 func TestAuditRejectsEveryDependencyPolicyViolation(t *testing.T) {
 	t.Parallel()
 
 	got, err := Audit(context.Background(), AuditOptions{
-		ModuleRoot:     filepath.Join("testdata", "invalid"),
-		GateStatusPath: filepath.Join("testdata", "invalid", "docs", "gate-status.json"),
+		ModuleRoot:               filepath.Join("testdata", "invalid"),
+		GateStatusPath:           filepath.Join("testdata", "invalid", "docs", "gate-status.json"),
+		allowFixtureReplacements: true,
 	})
 	if err != nil {
 		t.Fatalf("Audit(invalid): %v", err)
@@ -77,8 +409,9 @@ func TestAuditRejectsDirectRuntimeImportDespiteIndirectRequireMarker(t *testing.
 	t.Parallel()
 
 	got, err := Audit(context.Background(), AuditOptions{
-		ModuleRoot:     filepath.Join("testdata", "indirect-label"),
-		GateStatusPath: filepath.Join("testdata", "indirect-label", "docs", "gate-status.json"),
+		ModuleRoot:               filepath.Join("testdata", "indirect-label"),
+		GateStatusPath:           filepath.Join("testdata", "indirect-label", "docs", "gate-status.json"),
+		allowFixtureReplacements: true,
 	})
 	if err != nil {
 		t.Fatalf("Audit(indirect-label): %v", err)
@@ -93,8 +426,9 @@ func TestAuditFailsClosedWhenTestPackageGraphCannotLoad(t *testing.T) {
 	t.Parallel()
 
 	_, err := Audit(context.Background(), AuditOptions{
-		ModuleRoot:     filepath.Join("testdata", "broken-test-graph"),
-		GateStatusPath: filepath.Join("testdata", "broken-test-graph", "docs", "gate-status.json"),
+		ModuleRoot:               filepath.Join("testdata", "broken-test-graph"),
+		GateStatusPath:           filepath.Join("testdata", "broken-test-graph", "docs", "gate-status.json"),
+		allowFixtureReplacements: true,
 	})
 	assertAuditErrorContains(t, err, "load test package graph", "internal/missing")
 }
@@ -103,8 +437,9 @@ func TestAuditNeverFallsBackFromAnAuthoritativeVendorManifest(t *testing.T) {
 	t.Parallel()
 
 	_, err := Audit(context.Background(), AuditOptions{
-		ModuleRoot:     filepath.Join("testdata", "broken-vendor"),
-		GateStatusPath: filepath.Join("testdata", "broken-vendor", "docs", "gate-status.json"),
+		ModuleRoot:               filepath.Join("testdata", "broken-vendor"),
+		GateStatusPath:           filepath.Join("testdata", "broken-vendor", "docs", "gate-status.json"),
+		allowFixtureReplacements: true,
 	})
 	assertAuditErrorContains(t, err, "load runtime package graph", "inconsistent vendoring")
 }
@@ -113,8 +448,9 @@ func TestAuditRejectsMismatchedVendoredModuleVersion(t *testing.T) {
 	t.Parallel()
 
 	_, err := Audit(context.Background(), AuditOptions{
-		ModuleRoot:     filepath.Join("testdata", "mismatched-version"),
-		GateStatusPath: filepath.Join("testdata", "mismatched-version", "docs", "gate-status.json"),
+		ModuleRoot:               filepath.Join("testdata", "mismatched-version"),
+		GateStatusPath:           filepath.Join("testdata", "mismatched-version", "docs", "gate-status.json"),
+		allowFixtureReplacements: true,
 	})
 	assertAuditErrorContains(t, err, "load runtime package graph", "v1.0.0", "v1.0.1")
 }
@@ -175,8 +511,9 @@ func TestAuditReportsMissingVendorManifest(t *testing.T) {
 	t.Parallel()
 
 	got, err := Audit(context.Background(), AuditOptions{
-		ModuleRoot:     filepath.Join("testdata", "missing-vendor"),
-		GateStatusPath: filepath.Join("testdata", "missing-vendor", "docs", "gate-status.json"),
+		ModuleRoot:               filepath.Join("testdata", "missing-vendor"),
+		GateStatusPath:           filepath.Join("testdata", "missing-vendor", "docs", "gate-status.json"),
+		allowFixtureReplacements: true,
 	})
 	if err != nil {
 		t.Fatalf("Audit(missing-vendor): %v", err)
@@ -189,14 +526,16 @@ func TestAuditReportsMissingVendorManifest(t *testing.T) {
 
 func TestAuditUsesVendorWithAnEmptyOfflineModuleCache(t *testing.T) {
 	tests := []struct {
-		name     string
-		root     string
-		gatePath string
+		name                     string
+		root                     string
+		gatePath                 string
+		allowFixtureReplacements bool
 	}{
 		{
-			name:     "fixture",
-			root:     filepath.Join("testdata", "valid"),
-			gatePath: filepath.Join("testdata", "valid", "docs", "gate-status.json"),
+			name:                     "fixture",
+			root:                     filepath.Join("testdata", "valid"),
+			gatePath:                 filepath.Join("testdata", "valid", "docs", "gate-status.json"),
+			allowFixtureReplacements: true,
 		},
 		{
 			name:     "real repository",
@@ -212,8 +551,9 @@ func TestAuditUsesVendorWithAnEmptyOfflineModuleCache(t *testing.T) {
 			t.Setenv("GOTOOLCHAIN", "local")
 
 			got, err := Audit(context.Background(), AuditOptions{
-				ModuleRoot:     test.root,
-				GateStatusPath: test.gatePath,
+				ModuleRoot:               test.root,
+				GateStatusPath:           test.gatePath,
+				allowFixtureReplacements: test.allowFixtureReplacements,
 			})
 			if err != nil {
 				t.Fatalf("Audit(%s) with an empty offline module cache: %v", test.name, err)
@@ -225,7 +565,7 @@ func TestAuditUsesVendorWithAnEmptyOfflineModuleCache(t *testing.T) {
 	}
 }
 
-func TestRunFailsAndNamesDependencyPolicyReasons(t *testing.T) {
+func TestRunRejectsReplaceDirectivesWithoutATestOverride(t *testing.T) {
 	t.Parallel()
 
 	var stderr bytes.Buffer
@@ -235,23 +575,82 @@ func TestRunFailsAndNamesDependencyPolicyReasons(t *testing.T) {
 		io.Discard,
 		&stderr,
 	)
-	if code != 1 {
-		t.Fatalf("Run exit code = %d, want 1; stderr:\n%s", code, stderr.String())
+	if code != 2 {
+		t.Fatalf("Run exit code = %d, want 2; stderr:\n%s", code, stderr.String())
 	}
-	for _, text := range []string{"example.com/rogue", "GPL-3.0-only", "internal/transport", "R5", "vendor"} {
+	for _, text := range []string{"go.mod", "replace directive", "forbid"} {
 		if !strings.Contains(stderr.String(), text) {
 			t.Errorf("stderr does not contain %q:\n%s", text, stderr.String())
 		}
 	}
 }
 
-func TestCurrentEmptyRuntimeTreePasses(t *testing.T) {
+func TestUNIT021_RealRepositoryDependencySupplyChainAuditPassesOffline(t *testing.T) {
+	t.Setenv("GOMODCACHE", t.TempDir())
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOSUMDB", "off")
+	t.Setenv("GOTOOLCHAIN", "local")
+
 	got, err := AuditRepository(context.Background(), filepath.Clean(filepath.Join("..", "..")))
 	if err != nil {
 		t.Fatalf("AuditRepository: %v", err)
 	}
 	if len(got) != 0 {
 		t.Fatalf("current repository has dependency findings:\n%s", formatAuditFindings(got))
+	}
+}
+
+func auditDependencyFixture(root string) ([]Finding, error) {
+	return Audit(context.Background(), AuditOptions{
+		ModuleRoot:               root,
+		GateStatusPath:           filepath.Join(root, "docs", "gate-status.json"),
+		allowFixtureReplacements: true,
+	})
+}
+
+func copyDependencyFixture(t *testing.T, name string) string {
+	t.Helper()
+
+	source := filepath.Join("testdata", name)
+	destination := filepath.Join(t.TempDir(), name)
+	err := filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(destination, relative)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, contents, info.Mode().Perm())
+	})
+	if err != nil {
+		t.Fatalf("copy dependency fixture: %v", err)
+	}
+	return destination
+}
+
+func writeDependencyReviewManifest(t *testing.T, path string, manifest dependencyReviewManifest) {
+	t.Helper()
+
+	contents, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatalf("encode dependency review manifest: %v", err)
+	}
+	contents = append(contents, '\n')
+	if err := os.WriteFile(path, contents, 0o644); err != nil {
+		t.Fatalf("write dependency review manifest: %v", err)
 	}
 }
 

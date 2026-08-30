@@ -3,8 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,11 +19,22 @@ import (
 )
 
 var spdxPattern = regexp.MustCompile(`(?im)SPDX-License-Identifier:[[:space:]]*([^[:space:]]+)`)
+var reviewedDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
+const (
+	reviewManifestSchema  = 1
+	vendorDigestAlgorithm = "sha256-framed-tree-v1"
+)
 
 // AuditOptions names the module and gate-state inputs.
 type AuditOptions struct {
 	ModuleRoot     string
 	GateStatusPath string
+
+	// allowFixtureReplacements is intentionally unavailable to the CLI and
+	// production callers. Package-local tests use it only for hermetic stub
+	// modules; repository audits always reject replace directives.
+	allowFixtureReplacements bool
 }
 
 // Finding is one deterministic dependency-policy failure.
@@ -66,6 +81,11 @@ func Audit(ctx context.Context, options AuditOptions) ([]Finding, error) {
 	root, err := filepath.Abs(options.ModuleRoot)
 	if err != nil {
 		return nil, fmt.Errorf("resolve module root: %w", err)
+	}
+	if !options.allowFixtureReplacements {
+		if err := rejectGoModReplacements(ctx, root); err != nil {
+			return nil, err
+		}
 	}
 	graph, err := loadGraph(ctx, root)
 	if err != nil {
@@ -130,6 +150,11 @@ func Audit(ctx context.Context, options AuditOptions) ([]Finding, error) {
 	}
 	modulePaths := auditedModules(graph)
 	findings = append(findings, vendorVersionFindings(graph, vendored, manifestPath)...)
+	reviewFindings, err := auditDependencyReviews(root, graph, vendored)
+	if err != nil {
+		return nil, err
+	}
+	findings = append(findings, reviewFindings...)
 	for _, modulePath := range modulePaths {
 		if _, ok := vendored[modulePath]; !ok {
 			findings = append(findings, Finding{
@@ -172,6 +197,23 @@ func AuditRepository(ctx context.Context, root string) ([]Finding, error) {
 		ModuleRoot:     root,
 		GateStatusPath: filepath.Join(root, "docs", "gate-status.json"),
 	})
+}
+
+func rejectGoModReplacements(ctx context.Context, root string) error {
+	output, stderr, err := runGo(ctx, root, "mod", "edit", "-json")
+	if err != nil {
+		return fmt.Errorf("parse go.mod %s: %w%s", filepath.Join(root, "go.mod"), err, stderrSuffix(stderr))
+	}
+	var parsed struct {
+		Replace []json.RawMessage
+	}
+	if err := json.Unmarshal(output, &parsed); err != nil {
+		return fmt.Errorf("decode go.mod %s: %w", filepath.Join(root, "go.mod"), err)
+	}
+	if len(parsed.Replace) != 0 {
+		return fmt.Errorf("go.mod %s contains %d replace directive(s); repository dependency audits forbid all replacements", filepath.Join(root, "go.mod"), len(parsed.Replace))
+	}
+	return nil
 }
 
 func loadGraph(ctx context.Context, root string) (moduleGraph, error) {
@@ -400,6 +442,394 @@ func readVendorManifest(path string) (map[string]string, error) {
 		vendored[modulePath] = version
 	}
 	return vendored, nil
+}
+
+type dependencyReviewManifest struct {
+	SchemaVersion         int                    `json:"schema_version"`
+	VendorDigestAlgorithm string                 `json:"vendor_tree_digest_algorithm"`
+	Reviews               []dependencyReview     `json:"reviews"`
+	TransitiveDisclosures []transitiveDisclosure `json:"transitive_disclosures"`
+}
+
+type dependencyReview struct {
+	Module           string `json:"module"`
+	Version          string `json:"version"`
+	Status           string `json:"status"`
+	ReviewFile       string `json:"review_file"`
+	VendorTreeSHA256 string `json:"vendor_tree_sha256"`
+}
+
+type transitiveDisclosure struct {
+	Module       string `json:"module"`
+	Version      string `json:"version"`
+	Relationship string `json:"relationship"`
+	ReviewFile   string `json:"review_file"`
+}
+
+func auditDependencyReviews(root string, graph moduleGraph, vendored map[string]string) ([]Finding, error) {
+	manifestPath := filepath.Join(root, "docs", "dependencies", "reviews.json")
+	manifest, err := readDependencyReviewManifest(manifestPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var findings []Finding
+	if manifest.SchemaVersion != reviewManifestSchema {
+		findings = append(findings, Finding{
+			Kind: "malformed-review-manifest", Path: manifestPath,
+			Message: fmt.Sprintf("schema_version is %d, want %d", manifest.SchemaVersion, reviewManifestSchema),
+		})
+	}
+	if manifest.VendorDigestAlgorithm != vendorDigestAlgorithm {
+		findings = append(findings, Finding{
+			Kind: "malformed-review-manifest", Path: manifestPath,
+			Message: fmt.Sprintf("vendor_tree_digest_algorithm is %q, want %q", manifest.VendorDigestAlgorithm, vendorDigestAlgorithm),
+		})
+	}
+	if manifest.Reviews == nil {
+		findings = append(findings, Finding{
+			Kind: "malformed-review-manifest", Path: manifestPath,
+			Message: "reviews must be a JSON array",
+		})
+	}
+	if manifest.TransitiveDisclosures == nil {
+		findings = append(findings, Finding{
+			Kind: "malformed-review-manifest", Path: manifestPath,
+			Message: "transitive_disclosures must be a JSON array",
+		})
+	}
+
+	reachable := make(map[string]bool)
+	for _, modulePath := range auditedModules(graph) {
+		reachable[modulePath] = true
+	}
+
+	reviews := make(map[string]dependencyReview, len(manifest.Reviews))
+	for index, review := range manifest.Reviews {
+		entryPath := fmt.Sprintf("%s:reviews[%d]", manifestPath, index)
+		validModule := validModulePath(review.Module)
+		if !validModule || !looksLikeVersion(review.Version) || review.Status != "accepted" || !reviewedDigestPattern.MatchString(review.VendorTreeSHA256) {
+			findings = append(findings, Finding{
+				Kind: "malformed-review", Module: review.Module, Path: entryPath,
+				Message: "review requires a valid module, v-prefixed version, accepted status, and lowercase sha256 digest",
+			})
+		}
+		if err := validateDependencyReviewFile(root, review.ReviewFile); err != nil {
+			findings = append(findings, Finding{
+				Kind: "malformed-review", Module: review.Module, Path: entryPath,
+				Message: err.Error(),
+			})
+		}
+		if !validModule {
+			continue
+		}
+		if _, duplicate := reviews[review.Module]; duplicate {
+			findings = append(findings, Finding{
+				Kind: "duplicate-review", Module: review.Module, Path: entryPath,
+				Message: "module has more than one dependency review entry",
+			})
+			continue
+		}
+		reviews[review.Module] = review
+		if !reachable[review.Module] {
+			findings = append(findings, Finding{
+				Kind: "extra-review", Module: review.Module, Path: entryPath,
+				Message: "review entry does not correspond to a reachable runtime or test module",
+			})
+		}
+	}
+
+	for _, modulePath := range auditedModules(graph) {
+		selected := graph.Modules[modulePath]
+		review, exists := reviews[modulePath]
+		if !exists {
+			findings = append(findings, Finding{
+				Kind: "missing-review", Module: modulePath, Path: manifestPath,
+				Message: fmt.Sprintf("reachable module %s@%s has no accepted machine-readable review", modulePath, selected.Version),
+			})
+			continue
+		}
+		if review.Version != selected.Version {
+			findings = append(findings, Finding{
+				Kind: "review-version-mismatch", Module: modulePath, Path: manifestPath,
+				Message: fmt.Sprintf("module graph selects %s, but dependency review records %s", selected.Version, review.Version),
+			})
+			continue
+		}
+		if _, exists := vendored[modulePath]; !exists {
+			continue
+		}
+		digest, digestErr := vendorTreeDigest(root, modulePath)
+		if digestErr != nil {
+			findings = append(findings, Finding{
+				Kind: "vendor-tree-unreadable", Module: modulePath, Path: filepath.Join(root, "vendor", filepath.FromSlash(modulePath)),
+				Message: digestErr.Error(),
+			})
+			continue
+		}
+		if review.VendorTreeSHA256 != digest {
+			findings = append(findings, Finding{
+				Kind: "vendor-tree-digest-mismatch", Module: modulePath, Path: filepath.Join(root, "vendor", filepath.FromSlash(modulePath)),
+				Message: fmt.Sprintf("vendored tree digest is %s, reviewed digest is %s", digest, review.VendorTreeSHA256),
+			})
+		}
+	}
+
+	findings = append(findings, auditTransitiveDisclosures(root, manifestPath, manifest.TransitiveDisclosures, graph)...)
+	return findings, nil
+}
+
+func readDependencyReviewManifest(path string) (dependencyReviewManifest, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return dependencyReviewManifest{}, fmt.Errorf("read dependency reviews %s: %w", path, err)
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	decoder.DisallowUnknownFields()
+	var manifest dependencyReviewManifest
+	if err := decoder.Decode(&manifest); err != nil {
+		return dependencyReviewManifest{}, fmt.Errorf("decode dependency reviews %s: %w", path, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return dependencyReviewManifest{}, fmt.Errorf("decode dependency reviews %s: multiple JSON values", path)
+		}
+		return dependencyReviewManifest{}, fmt.Errorf("decode dependency reviews %s: %w", path, err)
+	}
+	return manifest, nil
+}
+
+func validateDependencyReviewFile(root, reviewFile string) error {
+	if reviewFile == "" || filepath.IsAbs(reviewFile) || strings.Contains(reviewFile, `\`) || filepath.Ext(reviewFile) != ".md" {
+		return fmt.Errorf("review_file %q must be a relative Markdown path within docs/dependencies", reviewFile)
+	}
+	base := filepath.Join(root, "docs", "dependencies")
+	baseInfo, err := os.Lstat(base)
+	if err != nil {
+		return fmt.Errorf("inspect docs/dependencies: %w", err)
+	}
+	if !baseInfo.IsDir() || baseInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("docs/dependencies must be a real directory")
+	}
+	candidate := filepath.Join(base, filepath.FromSlash(reviewFile))
+	relative, err := filepath.Rel(base, candidate)
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("review_file %q escapes docs/dependencies", reviewFile)
+	}
+	info, err := os.Lstat(candidate)
+	if err != nil {
+		return fmt.Errorf("review_file %q is unavailable: %w", reviewFile, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("review_file %q must resolve to a regular file, not a symlink or special file", reviewFile)
+	}
+	realBase, err := filepath.EvalSymlinks(base)
+	if err != nil {
+		return fmt.Errorf("resolve docs/dependencies: %w", err)
+	}
+	realCandidate, err := filepath.EvalSymlinks(candidate)
+	if err != nil {
+		return fmt.Errorf("resolve review_file %q: %w", reviewFile, err)
+	}
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return fmt.Errorf("resolve module root: %w", err)
+	}
+	baseFromRoot, err := filepath.Rel(realRoot, realBase)
+	if err != nil || baseFromRoot == ".." || strings.HasPrefix(baseFromRoot, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("docs/dependencies resolves outside the module root")
+	}
+	realRelative, err := filepath.Rel(realBase, realCandidate)
+	if err != nil || realRelative == ".." || strings.HasPrefix(realRelative, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("review_file %q resolves outside docs/dependencies", reviewFile)
+	}
+	return nil
+}
+
+func auditTransitiveDisclosures(root, manifestPath string, disclosures []transitiveDisclosure, graph moduleGraph) []Finding {
+	goSum, err := os.ReadFile(filepath.Join(root, "go.sum"))
+	if err != nil && !os.IsNotExist(err) {
+		return []Finding{{Kind: "malformed-disclosure", Path: manifestPath, Message: fmt.Sprintf("read go.sum: %v", err)}}
+	}
+	summed, parseErr := goSumModuleVersions(string(goSum))
+	if parseErr != nil {
+		return []Finding{{Kind: "malformed-disclosure", Path: manifestPath, Message: parseErr.Error()}}
+	}
+	reachableModules := make(map[string]bool)
+	reachableVersions := make(map[string]bool)
+	for _, modulePath := range auditedModules(graph) {
+		reachableModules[modulePath] = true
+		reachableVersions[modulePath+"@"+graph.Modules[modulePath].Version] = true
+	}
+	expected := make(map[string]bool)
+	for key := range summed {
+		if !reachableVersions[key] {
+			expected[key] = true
+		}
+	}
+	seen := make(map[string]bool, len(disclosures))
+	var findings []Finding
+	for index, disclosure := range disclosures {
+		entryPath := fmt.Sprintf("%s:transitive_disclosures[%d]", manifestPath, index)
+		key := disclosure.Module + "@" + disclosure.Version
+		if !validModulePath(disclosure.Module) || !looksLikeVersion(disclosure.Version) || disclosure.Relationship != "upstream-test-only" {
+			findings = append(findings, Finding{
+				Kind: "malformed-disclosure", Module: disclosure.Module, Path: entryPath,
+				Message: "disclosure requires a valid module, v-prefixed version, and upstream-test-only relationship",
+			})
+		}
+		if err := validateDependencyReviewFile(root, disclosure.ReviewFile); err != nil {
+			findings = append(findings, Finding{
+				Kind: "malformed-disclosure", Module: disclosure.Module, Path: entryPath, Message: err.Error(),
+			})
+		}
+		if seen[key] {
+			findings = append(findings, Finding{
+				Kind: "duplicate-disclosure", Module: disclosure.Module, Path: entryPath,
+				Message: "transitive disclosure is duplicated",
+			})
+		}
+		seen[key] = true
+		if reachableModules[disclosure.Module] {
+			findings = append(findings, Finding{
+				Kind: "malformed-disclosure", Module: disclosure.Module, Path: entryPath,
+				Message: "reachable modules require accepted review entries, not transitive disclosures",
+			})
+		}
+		if !expected[key] {
+			findings = append(findings, Finding{
+				Kind: "extra-disclosure", Module: disclosure.Module, Path: entryPath,
+				Message: "disclosure is stale, reachable, or absent from go.sum",
+			})
+		}
+	}
+	keys := make([]string, 0, len(expected))
+	for key := range expected {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if seen[key] {
+			continue
+		}
+		modulePath, version, _ := strings.Cut(key, "@")
+		findings = append(findings, Finding{
+			Kind: "missing-disclosure", Module: modulePath, Path: manifestPath,
+			Message: fmt.Sprintf("non-reachable go.sum module %s@%s lacks an upstream-test-only disclosure", modulePath, version),
+		})
+	}
+	return findings
+}
+
+func goSumModuleVersions(contents string) (map[string]bool, error) {
+	versions := make(map[string]bool)
+	for lineNumber, line := range strings.Split(contents, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 3 {
+			return nil, fmt.Errorf("go.sum line %d is malformed", lineNumber+1)
+		}
+		version := strings.TrimSuffix(fields[1], "/go.mod")
+		if !validModulePath(fields[0]) || !looksLikeVersion(version) {
+			return nil, fmt.Errorf("go.sum line %d has an invalid module or version", lineNumber+1)
+		}
+		versions[fields[0]+"@"+version] = true
+	}
+	return versions, nil
+}
+
+func validModulePath(modulePath string) bool {
+	if modulePath == "" || filepath.IsAbs(modulePath) || strings.ContainsAny(modulePath, "\\\t\r\n ") {
+		return false
+	}
+	for _, segment := range strings.Split(modulePath, "/") {
+		if segment == "" || segment == "." || segment == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+func vendorTreeDigest(root, modulePath string) (string, error) {
+	if !validModulePath(modulePath) {
+		return "", fmt.Errorf("invalid module path %q", modulePath)
+	}
+	moduleRoot := filepath.Join(root, "vendor", filepath.FromSlash(modulePath))
+	rootInfo, err := os.Lstat(moduleRoot)
+	if err != nil {
+		return "", fmt.Errorf("inspect vendored module tree: %w", err)
+	}
+	if !rootInfo.IsDir() || rootInfo.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("vendored module root must be a real directory")
+	}
+
+	var files []string
+	err = filepath.WalkDir(moduleRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == moduleRoot {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("vendored module contains symlink %s", path)
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("vendored module contains non-regular file %s", path)
+		}
+		relative, err := filepath.Rel(moduleRoot, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, filepath.ToSlash(relative))
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(files) == 0 {
+		return "", fmt.Errorf("vendored module tree is empty")
+	}
+	sort.Strings(files)
+
+	digest := sha256.New()
+	_, _ = digest.Write([]byte("conduit-vendor-tree-sha256-framed-v1\x00"))
+	for _, relative := range files {
+		path := filepath.Join(moduleRoot, filepath.FromSlash(relative))
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return "", fmt.Errorf("read vendored file %s: %w", path, err)
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			return "", fmt.Errorf("stat vendored file %s: %w", path, err)
+		}
+		writeDigestFrame(digest, []byte(relative))
+		var mode [4]byte
+		binary.BigEndian.PutUint32(mode[:], uint32(info.Mode().Perm()))
+		_, _ = digest.Write(mode[:])
+		writeDigestFrame(digest, data)
+	}
+	return "sha256:" + hex.EncodeToString(digest.Sum(nil)), nil
+}
+
+func writeDigestFrame(writer io.Writer, value []byte) {
+	var size [8]byte
+	binary.BigEndian.PutUint64(size[:], uint64(len(value)))
+	_, _ = writer.Write(size[:])
+	_, _ = writer.Write(value)
 }
 
 func looksLikeVersion(value string) bool {

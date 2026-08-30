@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "vendor_tree_digest_algorithm": "sha256-framed-tree-v1",
+  "reviews": [
+    {
+      "module": "gopkg.in/yaml.v3",
+      "version": "v3.0.1",
+      "status": "accepted",
+      "review_file": "gopkg.in-yaml.v3-v3.0.1.md",
+      "vendor_tree_sha256": "sha256:8fd099dfecbcd82abaf9556bde54751559cae22ab0b7da8ef411e6e891d01739"
+    }
+  ],
+  "transitive_disclosures": [
+    {
+      "module": "gopkg.in/check.v1",
+      "version": "v0.0.0-20161208181325-20d25e280405",
+      "relationship": "upstream-test-only",
+      "review_file": "gopkg.in-yaml.v3-v3.0.1.md"
+    }
+  ]
+}
