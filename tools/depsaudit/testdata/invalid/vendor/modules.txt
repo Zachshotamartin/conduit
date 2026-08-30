@@ -4,5 +4,9 @@ example.com/rogue
 # github.com/coder/websocket v0.0.0 => ./stubs/github.com/coder/websocket
 ## explicit; go 1.23.0
 github.com/coder/websocket
+# github.com/nats-io/nats.go v0.0.0 => ./stubs/github.com/nats-io/nats.go
+## explicit; go 1.23.0
+github.com/nats-io/nats.go
 # example.com/rogue => ./stubs/example.com/rogue
 # github.com/coder/websocket => ./stubs/github.com/coder/websocket
+# github.com/nats-io/nats.go => ./stubs/github.com/nats-io/nats.go

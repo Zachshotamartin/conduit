@@ -123,15 +123,17 @@ func Audit(ctx context.Context, options AuditOptions) ([]Finding, error) {
 		}
 	}
 
-	vendored, err := readVendorManifest(filepath.Join(root, "vendor", "modules.txt"))
-	if err != nil && len(auditedModules(graph)) != 0 {
+	manifestPath := filepath.Join(root, "vendor", "modules.txt")
+	vendored, err := readVendorManifest(manifestPath)
+	if err != nil {
 		return nil, err
 	}
 	modulePaths := auditedModules(graph)
+	findings = append(findings, vendorVersionFindings(graph, vendored, manifestPath)...)
 	for _, modulePath := range modulePaths {
-		if !vendored[modulePath] {
+		if _, ok := vendored[modulePath]; !ok {
 			findings = append(findings, Finding{
-				Kind: "missing-vendor", Module: modulePath, Path: filepath.Join(root, "vendor", "modules.txt"),
+				Kind: "missing-vendor", Module: modulePath, Path: manifestPath,
 				Message: "module graph entry is not pinned in vendor/modules.txt",
 			})
 			continue
@@ -178,11 +180,11 @@ func loadGraph(ctx context.Context, root string) (moduleGraph, error) {
 		return moduleGraph{}, err
 	}
 
-	mode := "readonly"
-	if _, statErr := os.Stat(filepath.Join(root, "vendor", "modules.txt")); statErr == nil {
-		mode = "vendor"
+	mode, err := packageGraphModuleMode(root)
+	if err != nil {
+		return moduleGraph{}, err
 	}
-	packageOutput, stderr, err := runGoWithFallback(ctx, root, mode, false)
+	packageOutput, stderr, err := runGoList(ctx, root, mode, false)
 	if err != nil {
 		return moduleGraph{}, fmt.Errorf("load runtime package graph: %w%s", err, stderrSuffix(stderr))
 	}
@@ -214,41 +216,54 @@ func loadGraph(ctx context.Context, root string) (moduleGraph, error) {
 		}
 	}
 
-	testOutput, _, testErr := runGoWithFallback(ctx, root, mode, true)
-	if testErr == nil {
-		decoder = json.NewDecoder(bytes.NewReader(testOutput))
-		for decoder.More() {
-			var pkg listedPackage
-			if err := decoder.Decode(&pkg); err != nil {
-				return moduleGraph{}, fmt.Errorf("decode test package graph: %w", err)
-			}
-			if pkg.Module != nil && !pkg.Module.Main {
-				graph.TestModules[pkg.Module.Path] = true
-				ensureModule(graph.Modules, *pkg.Module)
-			}
+	testOutput, testStderr, err := runGoList(ctx, root, mode, true)
+	if err != nil {
+		return moduleGraph{}, fmt.Errorf("load test package graph: %w%s", err, stderrSuffix(testStderr))
+	}
+	decoder = json.NewDecoder(bytes.NewReader(testOutput))
+	for decoder.More() {
+		var pkg listedPackage
+		if err := decoder.Decode(&pkg); err != nil {
+			return moduleGraph{}, fmt.Errorf("decode test package graph: %w", err)
+		}
+		if pkg.Module != nil && !pkg.Module.Main {
+			graph.TestModules[pkg.Module.Path] = true
+			ensureModule(graph.Modules, *pkg.Module)
 		}
 	}
 	return graph, nil
 }
 
-func runGoWithFallback(ctx context.Context, root, mode string, tests bool) ([]byte, []byte, error) {
+func packageGraphModuleMode(root string) (string, error) {
+	manifest := filepath.Join(root, "vendor", "modules.txt")
+	info, err := os.Stat(manifest)
+	if err == nil {
+		if !info.Mode().IsRegular() {
+			return "", fmt.Errorf("vendor manifest %q is not a regular file", manifest)
+		}
+		return "vendor", nil
+	}
+	if !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat vendor manifest %q: %w", manifest, err)
+	}
+	return "readonly", nil
+}
+
+func runGoList(ctx context.Context, root, mode string, tests bool) ([]byte, []byte, error) {
 	args := []string{"list", "-mod=" + mode}
 	if tests {
 		args = append(args, "-test")
 	}
 	args = append(args, "-deps", "-json", "./...")
-	output, stderr, err := runGo(ctx, root, args...)
-	if err == nil || mode != "vendor" {
-		return output, stderr, err
-	}
-	args[1] = "-mod=readonly"
 	return runGo(ctx, root, args...)
 }
 
 func ensureModule(modules map[string]moduleInfo, module moduleInfo) {
 	if existing, ok := modules[module.Path]; ok {
 		module.Indirect = existing.Indirect
-		module.Version = existing.Version
+		if module.Version == "" {
+			module.Version = existing.Version
+		}
 	}
 	modules[module.Path] = module
 }
@@ -363,8 +378,8 @@ func gateNumber(value string) (int, bool) {
 	return number, err == nil && number >= 0 && number <= 10
 }
 
-func readVendorManifest(path string) (map[string]bool, error) {
-	vendored := make(map[string]bool)
+func readVendorManifest(path string) (map[string]string, error) {
+	vendored := make(map[string]string)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -377,7 +392,12 @@ func readVendorManifest(path string) (map[string]bool, error) {
 		if len(fields) < 3 || fields[0] != "#" || !looksLikeVersion(fields[2]) {
 			continue
 		}
-		vendored[fields[1]] = true
+		modulePath := fields[1]
+		version := fields[2]
+		if previous, duplicate := vendored[modulePath]; duplicate && previous != version {
+			return nil, fmt.Errorf("vendor manifest %s records conflicting versions for %s: %s and %s", path, modulePath, previous, version)
+		}
+		vendored[modulePath] = version
 	}
 	return vendored, nil
 }
@@ -463,6 +483,31 @@ func auditedModules(graph moduleGraph) []string {
 	}
 	sort.Strings(paths)
 	return paths
+}
+
+func vendorVersionFindings(graph moduleGraph, vendored map[string]string, manifestPath string) []Finding {
+	var findings []Finding
+	for _, modulePath := range auditedModules(graph) {
+		vendoredVersion, ok := vendored[modulePath]
+		if !ok {
+			continue
+		}
+		selected, ok := graph.Modules[modulePath]
+		if !ok || selected.Version == "" {
+			findings = append(findings, Finding{
+				Kind: "vendor-version-unresolved", Module: modulePath, Path: manifestPath,
+				Message: "runtime/test package graph did not report a selected module version",
+			})
+			continue
+		}
+		if vendoredVersion != selected.Version {
+			findings = append(findings, Finding{
+				Kind: "vendor-version-mismatch", Module: modulePath, Path: manifestPath,
+				Message: fmt.Sprintf("module graph selects %s, but vendor/modules.txt records %s", selected.Version, vendoredVersion),
+			})
+		}
+	}
+	return findings
 }
 
 // directRuntimeModules derives the direct dependency boundary from package

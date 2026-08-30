@@ -71,7 +71,6 @@ func TestAuditRejectsEveryDependencyPolicyViolation(t *testing.T) {
 	assertAuditFinding(t, got, "forbidden-license", "github.com/coder/websocket", "")
 	assertAuditFinding(t, got, "wrong-package", "github.com/coder/websocket", "example.com/depsinvalid/internal/fanout")
 	assertAuditFinding(t, got, "dependency-before-gate", "github.com/nats-io/nats.go", "")
-	assertAuditFinding(t, got, "missing-vendor", "github.com/nats-io/nats.go", "")
 }
 
 func TestAuditRejectsDirectRuntimeImportDespiteIndirectRequireMarker(t *testing.T) {
@@ -88,6 +87,142 @@ func TestAuditRejectsDirectRuntimeImportDespiteIndirectRequireMarker(t *testing.
 		t.Fatalf("Audit(indirect-label) findings = %d, want 1:\n%s", len(got), formatAuditFindings(got))
 	}
 	assertAuditFinding(t, got, "unapproved-direct-runtime", "example.com/rogue", "")
+}
+
+func TestAuditFailsClosedWhenTestPackageGraphCannotLoad(t *testing.T) {
+	t.Parallel()
+
+	_, err := Audit(context.Background(), AuditOptions{
+		ModuleRoot:     filepath.Join("testdata", "broken-test-graph"),
+		GateStatusPath: filepath.Join("testdata", "broken-test-graph", "docs", "gate-status.json"),
+	})
+	assertAuditErrorContains(t, err, "load test package graph", "internal/missing")
+}
+
+func TestAuditNeverFallsBackFromAnAuthoritativeVendorManifest(t *testing.T) {
+	t.Parallel()
+
+	_, err := Audit(context.Background(), AuditOptions{
+		ModuleRoot:     filepath.Join("testdata", "broken-vendor"),
+		GateStatusPath: filepath.Join("testdata", "broken-vendor", "docs", "gate-status.json"),
+	})
+	assertAuditErrorContains(t, err, "load runtime package graph", "inconsistent vendoring")
+}
+
+func TestAuditRejectsMismatchedVendoredModuleVersion(t *testing.T) {
+	t.Parallel()
+
+	_, err := Audit(context.Background(), AuditOptions{
+		ModuleRoot:     filepath.Join("testdata", "mismatched-version"),
+		GateStatusPath: filepath.Join("testdata", "mismatched-version", "docs", "gate-status.json"),
+	})
+	assertAuditErrorContains(t, err, "load runtime package graph", "v1.0.0", "v1.0.1")
+}
+
+func TestVendorVersionFindingsCoverRuntimeAndTestReachabilityExactly(t *testing.T) {
+	t.Parallel()
+
+	graph := moduleGraph{
+		Modules: map[string]moduleInfo{
+			"example.com/runtime":     {Path: "example.com/runtime", Version: "v1.2.3"},
+			"example.com/testonly":    {Path: "example.com/testonly", Version: "v2.3.4"},
+			"example.com/unreachable": {Path: "example.com/unreachable", Version: "v3.4.5"},
+		},
+		RuntimeModules: map[string]bool{"example.com/runtime": true},
+		TestModules:    map[string]bool{"example.com/testonly": true},
+	}
+	manifest := map[string]string{
+		"example.com/runtime":     "v1.2.4",
+		"example.com/testonly":    "v2.3.5",
+		"example.com/unreachable": "v9.9.9",
+	}
+
+	got := vendorVersionFindings(graph, manifest, "vendor/modules.txt")
+	if len(got) != 2 {
+		t.Fatalf("vendorVersionFindings returned %d findings, want 2:\n%s", len(got), formatAuditFindings(got))
+	}
+	assertAuditFinding(t, got, "vendor-version-mismatch", "example.com/runtime", "")
+	assertAuditFinding(t, got, "vendor-version-mismatch", "example.com/testonly", "")
+	for _, finding := range got {
+		if strings.Contains(finding.Message, "v9.9.9") {
+			t.Errorf("unreachable module affected version audit: %#v", finding)
+		}
+	}
+}
+
+func TestEnsureModuleKeepsTheSelectedGraphVersion(t *testing.T) {
+	t.Parallel()
+
+	modules := map[string]moduleInfo{
+		"example.com/dependency": {
+			Path: "example.com/dependency", Version: "v1.0.0", Indirect: true,
+		},
+	}
+	ensureModule(modules, moduleInfo{
+		Path: "example.com/dependency", Version: "v1.1.0",
+	})
+
+	got := modules["example.com/dependency"]
+	if got.Version != "v1.1.0" {
+		t.Errorf("selected graph version = %q, want v1.1.0", got.Version)
+	}
+	if !got.Indirect {
+		t.Error("go.mod indirect classification was not preserved")
+	}
+}
+
+func TestAuditReportsMissingVendorManifest(t *testing.T) {
+	t.Parallel()
+
+	got, err := Audit(context.Background(), AuditOptions{
+		ModuleRoot:     filepath.Join("testdata", "missing-vendor"),
+		GateStatusPath: filepath.Join("testdata", "missing-vendor", "docs", "gate-status.json"),
+	})
+	if err != nil {
+		t.Fatalf("Audit(missing-vendor): %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("Audit(missing-vendor) findings = %d, want 1:\n%s", len(got), formatAuditFindings(got))
+	}
+	assertAuditFinding(t, got, "missing-vendor", "github.com/coder/websocket", "")
+}
+
+func TestAuditUsesVendorWithAnEmptyOfflineModuleCache(t *testing.T) {
+	tests := []struct {
+		name     string
+		root     string
+		gatePath string
+	}{
+		{
+			name:     "fixture",
+			root:     filepath.Join("testdata", "valid"),
+			gatePath: filepath.Join("testdata", "valid", "docs", "gate-status.json"),
+		},
+		{
+			name:     "real repository",
+			root:     filepath.Clean(filepath.Join("..", "..")),
+			gatePath: filepath.Clean(filepath.Join("..", "..", "docs", "gate-status.json")),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("GOMODCACHE", t.TempDir())
+			t.Setenv("GOPROXY", "off")
+			t.Setenv("GOSUMDB", "off")
+			t.Setenv("GOTOOLCHAIN", "local")
+
+			got, err := Audit(context.Background(), AuditOptions{
+				ModuleRoot:     test.root,
+				GateStatusPath: test.gatePath,
+			})
+			if err != nil {
+				t.Fatalf("Audit(%s) with an empty offline module cache: %v", test.name, err)
+			}
+			if len(got) != 0 {
+				t.Fatalf("Audit(%s) returned findings:\n%s", test.name, formatAuditFindings(got))
+			}
+		})
+	}
 }
 
 func TestRunFailsAndNamesDependencyPolicyReasons(t *testing.T) {
@@ -141,6 +276,18 @@ func assertAuditFinding(t *testing.T, findings []Finding, kind, module, packageP
 		return
 	}
 	t.Fatalf("missing finding kind=%q module=%q package=%q\ngot:\n%s", kind, module, packagePath, formatAuditFindings(findings))
+}
+
+func assertAuditErrorContains(t *testing.T, err error, fragments ...string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("Audit returned nil error, want a fail-closed graph error")
+	}
+	for _, fragment := range fragments {
+		if !strings.Contains(err.Error(), fragment) {
+			t.Errorf("Audit error does not contain %q: %v", fragment, err)
+		}
+	}
 }
 
 func formatAuditFindings(findings []Finding) string {
