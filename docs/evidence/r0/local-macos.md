@@ -63,13 +63,12 @@ satisfied:
 - private-repository branch protection cannot be applied on the current
   account tier; the exact HTTP 403 and unblock commands are recorded in
   [branch-protection.md](branch-protection.md);
-- clean Linux arm64 and clean macOS GitHub Actions run links are pending the
-  branch push;
-- the required deliberate documentation-fixture failure and subsequent green
-  recovery run are pending;
 - `nightly.yml` has not completed a scheduled run. GitHub evaluates scheduled
   workflows from the default branch, while this workflow is still on the
   unmerged `gate/r0` branch. A manual dispatch can validate the workflow but
   cannot substitute for the required scheduled-run evidence.
+
+The clean cross-platform runs and deliberate-failure/recovery proof are
+recorded in [github-actions.md](github-actions.md).
 
 No R0 claim is earned and no later gate may start from this evidence.
