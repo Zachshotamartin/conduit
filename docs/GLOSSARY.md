@@ -1,6 +1,7 @@
 # Conduit Glossary
 
-Document status: normative controlled vocabulary. Last revised: 2026-08-30.
+Document status: accepted.
+Normative controlled vocabulary. Last revised: 2026-08-30.
 
 Controlled definitions. Documents in this set must use these terms with these
 meanings and no others. A new term used normatively in any document must be

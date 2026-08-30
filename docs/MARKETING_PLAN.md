@@ -1,6 +1,7 @@
 # Conduit Marketing Plan
 
-Document status: normative marketing plan. Last revised: 2026-08-30.
+Document status: accepted.
+Normative marketing plan. Last revised: 2026-08-30.
 Owning gates: the claims register is maintained from R0; launch assets are
 owned by R10 (BUILD_PLAN §18, R10.10).
 

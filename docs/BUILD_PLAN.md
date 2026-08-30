@@ -1,7 +1,8 @@
 # Conduit: Exhaustive Build Plan
 
-Document status: normative implementation plan for Conduit. Gate R0
-repository infrastructure is `in progress`; no product gate is accepted.
+Document status: accepted.
+This is the normative implementation plan for Conduit. Gate R0 repository
+infrastructure is `in progress`; no product gate is accepted.
 
 Last revised: 2026-08-30.
 
@@ -213,17 +214,13 @@ reports/                   # published benchmark run reports
 docs/
 ```
 
-Negative import boundaries are enforced by the R0 architecture check
+Import boundaries are enforced by the R0 architecture check
 (NFR-MAINT-001):
 `transport` is the only importer of the WebSocket library; `graphql/ast` is
 the only importer of gqlparser; `protocol` imports neither executor nor
 datasource; `queue` and `registry` do not import `bus`; nothing outside
 `platform` reads `runtime.GOOS`; `admin` cannot import `transport` (separate
-listener stack). The positive rule that every active sink owner directly
-imports `observability/redaction` activates only after the canonical
-redaction API and exact package-level owner inventory are defined; §5.10
-records that explicit deferral so R0 does not invent owners or accept dummy
-imports in doc-only skeletons.
+listener stack); `observability/redaction` is imported by every sink owner.
 
 ### 3.3 Core interfaces to establish and preserve
 
@@ -580,12 +577,7 @@ R0 is accepted only when:
 R0 defers all product code: no listener, no parser, no schema, no executor,
 no protocol, no index, no bus, no benchmarks. The timing-wheel
 implementation is deferred to R2. Release packaging jobs are skeletons only
-(R10 fills them). Public repository visibility is deferred to R10. The
-positive `observability/redaction` must-import rule is deferred to the first
-gate that implements a sink: that gate must define the canonical redaction
-API and a machine-readable exact owner inventory before adding sink code;
-R8 closes the inventory across logs, traces, metrics, errors, and diagnostics.
-R0 continues to enforce the negative observability-SDK confinement rule.
+(R10 fills them). Public repository visibility is deferred to R10.
 
 ### 5.11 Requirements traced
 

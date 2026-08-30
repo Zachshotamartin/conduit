@@ -13,8 +13,11 @@ import (
 
 var (
 	forbiddenDocumentationPhrase = regexp.MustCompile(`(?i)\b(?:TODO|coming\s+soon)\b`)
-	statusDeclaration            = regexp.MustCompile(`(?im)^(?:[[:space:]]*-[[:space:]]*)?(?:Document status|Status(?: of every deliverable in this document)?|Review status):[^\n]*(?:accepted|in progress|planned|deferred|normative)[^\n]*$`)
+	statusLabel                  = regexp.MustCompile(`(?i)^(?:[[:space:]]*-[[:space:]]*)?(?:\*\*)?(?:Document status|Status(?: of every deliverable in this document)?|Review status):(?:\*\*)?[[:space:]]*(.*)$`)
+	lifecycleWord                = regexp.MustCompile(`(?i)\b(?:accepted|in progress|planned|deferred)\b`)
 )
+
+var lifecycleValues = []string{"in progress", "accepted", "planned", "deferred"}
 
 type violation struct {
 	Path    string
@@ -62,10 +65,10 @@ func lintDocument(path string, allowDeferredLanguage bool) ([]violation, error) 
 	defer file.Close()
 
 	var violations []violation
-	var header strings.Builder
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 4096), 4<<20)
 	inFence := false
+	sawStatusLabel := false
 	lineNumber := 0
 	for scanner.Scan() {
 		lineNumber++
@@ -73,13 +76,19 @@ func lintDocument(path string, allowDeferredLanguage bool) ([]violation, error) 
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
 			inFence = !inFence
-			continue
 		}
-		if lineNumber <= 16 {
-			header.WriteString(line)
-			header.WriteByte('\n')
+		if lineNumber <= 16 && !inFence {
+			if match := statusLabel.FindStringSubmatch(line); match != nil {
+				sawStatusLabel = true
+				if reason := invalidLifecycleStatus(match[1]); reason != "" {
+					violations = append(violations, violation{
+						Path: path, Line: lineNumber,
+						Message: "invalid lifecycle status declaration: " + reason,
+					})
+				}
+			}
 		}
-		if inFence || allowDeferredLanguage {
+		if allowDeferredLanguage {
 			continue
 		}
 		if match := forbiddenDocumentationPhrase.FindString(line); match != "" {
@@ -93,7 +102,7 @@ func lintDocument(path string, allowDeferredLanguage bool) ([]violation, error) 
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	if !statusDeclaration.MatchString(header.String()) {
+	if !sawStatusLabel {
 		violations = append(violations, violation{
 			Path:    path,
 			Line:    1,
@@ -101,6 +110,59 @@ func lintDocument(path string, allowDeferredLanguage bool) ([]violation, error) 
 		})
 	}
 	return violations, nil
+}
+
+func invalidLifecycleStatus(raw string) string {
+	value := strings.TrimSpace(raw)
+	remainder := ""
+	selected := ""
+	if strings.HasPrefix(value, "`") {
+		closing := strings.Index(value[1:], "`")
+		if closing < 0 {
+			return "unterminated inline-code value"
+		}
+		selected = value[1 : closing+1]
+		remainder = value[closing+2:]
+	} else {
+		lower := strings.ToLower(value)
+		for _, candidate := range lifecycleValues {
+			if !strings.HasPrefix(lower, candidate) {
+				continue
+			}
+			if len(value) != len(candidate) && !isStatusBoundary(value[len(candidate)]) {
+				continue
+			}
+			selected = value[:len(candidate)]
+			remainder = value[len(candidate):]
+			break
+		}
+	}
+
+	if !isLifecycleValue(selected) {
+		return fmt.Sprintf("value must begin with exactly one of accepted, in progress, planned, or deferred; got %q", raw)
+	}
+	if lifecycleWord.MatchString(remainder) {
+		return fmt.Sprintf("declaration contains more than one lifecycle value: %q", raw)
+	}
+	return ""
+}
+
+func isLifecycleValue(value string) bool {
+	for _, candidate := range lifecycleValues {
+		if strings.EqualFold(value, candidate) {
+			return true
+		}
+	}
+	return false
+}
+
+func isStatusBoundary(value byte) bool {
+	switch value {
+	case ' ', '\t', '.', ',', ';', ':', ')', ']':
+		return true
+	default:
+		return false
+	}
 }
 
 func main() {

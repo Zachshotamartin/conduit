@@ -1,8 +1,10 @@
 # Conduit Authorization Model
 
+Document status: accepted.
+
 ## 1. Status and Scope
 
-- Status: every deliverable in this document is `planned`. Nothing described
+- Deliverable status: every deliverable in this document is `planned`. Nothing described
   here is implemented; no claim in this document is an implementation claim.
 - Last revised: 2026-08-30.
 - Owning gates: R3 owns subscribe-time and publish-time enforcement, including

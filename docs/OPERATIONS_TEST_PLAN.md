@@ -1,6 +1,7 @@
 # Conduit: Installation, Testing, Operations, and Release Plan
 
-Document status: normative lifecycle, verification, and release specification.
+Document status: accepted.
+This is the normative lifecycle, verification, and release specification.
 Gate R0 repository infrastructure is `in progress`; R1 through R10 remain
 `planned`. Last revised: 2026-08-30.
 

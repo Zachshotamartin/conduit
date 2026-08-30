@@ -1,7 +1,7 @@
 # Conduit Open Questions
 
-Document status: normative register of deferred decisions. Last revised:
-2026-08-30.
+Document status: accepted.
+Normative register of deferred decisions. Last revised: 2026-08-30.
 
 Every entry carries a fail-closed default position that governs until the
 question is reopened, and an explicit reopen trigger. Nothing outside this

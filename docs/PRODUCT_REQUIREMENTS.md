@@ -1,6 +1,7 @@
 # Conduit Product Requirements and User Flows
 
-Document status: normative product definition. Last revised: 2026-08-30.
+Document status: accepted.
+Normative product definition. Last revised: 2026-08-30.
 
 Companion specifications: [Build plan](./BUILD_PLAN.md),
 [Architecture](./ARCHITECTURE.md),

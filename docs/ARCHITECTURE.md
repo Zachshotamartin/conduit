@@ -1,6 +1,7 @@
 # Conduit Architecture
 
-Document status: normative architecture. Last revised: 2026-08-30.
+Document status: accepted.
+Normative architecture. Last revised: 2026-08-30.
 
 Companion specifications: [Product requirements](./PRODUCT_REQUIREMENTS.md), [Build plan](./BUILD_PLAN.md),
 [Protocol conformance](./PROTOCOL_CONFORMANCE.md), [Authorization model](./AUTHORIZATION_MODEL.md),
