@@ -139,19 +139,29 @@ func TestInvalidFixtureProvesEveryContractClassCanFail(t *testing.T) {
 		"action.pin",
 		"artifact.retention",
 		"job.command",
+		"job.command-inventory",
 		"job.condition",
 		"job.continue-on-error",
+		"job.environment",
+		"job.bootstrap",
 		"job.race",
+		"job.runner",
+		"job.structure",
 		"job.timeout",
 		"job.vendor-mode",
 		"nightly.govulncheck",
 		"platform.linux-arm64",
 		"platform.macos",
 		"protection.context",
+		"protection.policy",
 		"step.condition",
 		"step.continue-on-error",
+		"step.environment",
+		"step.structure",
 		"workflow.jobs",
+		"workflow.environment",
 		"workflow.permissions",
+		"workflow.structure",
 		"workflow.trigger",
 	}
 	gotCodes := make(map[string]bool, len(report.Findings))
@@ -171,7 +181,11 @@ func TestInvalidFixtureProvesEveryContractClassCanFail(t *testing.T) {
 func TestHostileWorkflowBypassesFailClosed(t *testing.T) {
 	t.Parallel()
 
-	const uploadPin = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+	const (
+		checkoutPin = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262"
+		setupGoPin  = "actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff"
+		uploadPin   = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
+	)
 	tests := []struct {
 		name     string
 		workflow string
@@ -202,7 +216,7 @@ func TestHostileWorkflowBypassesFailClosed(t *testing.T) {
 			old:      "      - run: GO=go ./scripts/check-format.sh",
 			new:      "      - run: GO=go ./scripts/check-format.sh\n        if: success()",
 			wantCode: "step.condition",
-			wantPath: "jobs.lint.steps.0.if",
+			wantPath: "jobs.lint.steps.2.if",
 		},
 		{
 			name:     "step continue on error even false",
@@ -210,7 +224,7 @@ func TestHostileWorkflowBypassesFailClosed(t *testing.T) {
 			old:      "      - run: GO=go ./scripts/check-format.sh",
 			new:      "      - run: GO=go ./scripts/check-format.sh\n        continue-on-error: false",
 			wantCode: "step.continue-on-error",
-			wantPath: "jobs.lint.steps.0.continue-on-error",
+			wantPath: "jobs.lint.steps.2.continue-on-error",
 		},
 		{
 			name:     "mutable known action",
@@ -218,7 +232,7 @@ func TestHostileWorkflowBypassesFailClosed(t *testing.T) {
 			old:      "uses: " + uploadPin,
 			new:      "uses: actions/upload-artifact@v4",
 			wantCode: "action.pin",
-			wantPath: "jobs.unit-race.steps.1.uses",
+			wantPath: "jobs.unit-race.steps.3.uses",
 		},
 		{
 			name:     "unknown pinned action",
@@ -226,7 +240,7 @@ func TestHostileWorkflowBypassesFailClosed(t *testing.T) {
 			old:      "uses: " + uploadPin,
 			new:      "uses: attacker/example@0123456789abcdef0123456789abcdef01234567",
 			wantCode: "action.pin",
-			wantPath: "jobs.unit-race.steps.1.uses",
+			wantPath: "jobs.unit-race.steps.3.uses",
 		},
 		{
 			name:     "job level reusable workflow",
@@ -235,6 +249,118 @@ func TestHostileWorkflowBypassesFailClosed(t *testing.T) {
 			new:      "  lint:\n    name: lint\n    uses: attacker/example/.github/workflows/ci.yml@main\n    runs-on: ubuntu-latest",
 			wantCode: "action.pin",
 			wantPath: "jobs.lint.uses",
+		},
+		{
+			name:     "protected checker omitted",
+			workflow: "pr",
+			old:      "      - run: go run -mod=vendor ./tools/cicontract -root .\n",
+			new:      "",
+			wantCode: "job.command",
+			wantPath: "jobs.lint.steps",
+		},
+		{
+			name:     "mutating command inserted before checker",
+			workflow: "pr",
+			old:      "      - run: go run -mod=vendor ./tools/cicontract -root .",
+			new:      "      - run: cp /tmp/forged-policy.json .github/branch-protection.json\n      - run: go run -mod=vendor ./tools/cicontract -root .",
+			wantCode: "job.command-inventory",
+			wantPath: "jobs.lint.steps",
+		},
+		{
+			name:     "checkout omitted",
+			workflow: "pr",
+			old:      "      - uses: " + checkoutPin + "\n",
+			new:      "",
+			wantCode: "job.bootstrap",
+			wantPath: "jobs.lint.steps",
+		},
+		{
+			name:     "checkout duplicated",
+			workflow: "pr",
+			old:      "      - uses: " + checkoutPin,
+			new:      "      - uses: " + checkoutPin + "\n      - uses: " + checkoutPin,
+			wantCode: "job.bootstrap",
+			wantPath: "jobs.lint.steps",
+		},
+		{
+			name:     "setup go omitted",
+			workflow: "pr",
+			old:      "      - uses: " + setupGoPin + "\n        with:\n          go-version: \"1.23.12\"\n          check-latest: false\n          cache: false\n",
+			new:      "",
+			wantCode: "job.bootstrap",
+			wantPath: "jobs.lint.steps",
+		},
+		{
+			name:     "bootstrap actions reordered",
+			workflow: "pr",
+			old:      "      - uses: " + checkoutPin + "\n      - uses: " + setupGoPin + "\n        with:\n          go-version: \"1.23.12\"\n          check-latest: false\n          cache: false",
+			new:      "      - uses: " + setupGoPin + "\n        with:\n          go-version: \"1.23.12\"\n          check-latest: false\n          cache: false\n      - uses: " + checkoutPin,
+			wantCode: "job.bootstrap",
+			wantPath: "jobs.lint.steps.0",
+		},
+		{
+			name:     "setup go duplicated",
+			workflow: "pr",
+			old:      "      - uses: " + setupGoPin + "\n        with:\n          go-version: \"1.23.12\"\n          check-latest: false\n          cache: false",
+			new:      "      - uses: " + setupGoPin + "\n        with:\n          go-version: \"1.23.12\"\n          check-latest: false\n          cache: false\n      - uses: " + setupGoPin + "\n        with:\n          go-version: \"1.23.12\"\n          check-latest: false\n          cache: false",
+			wantCode: "job.bootstrap",
+			wantPath: "jobs.lint.steps",
+		},
+		{
+			name:     "setup go version changed",
+			workflow: "pr",
+			old:      "          go-version: \"1.23.12\"",
+			new:      "          go-version: \"1.24.0\"",
+			wantCode: "job.bootstrap",
+			wantPath: "jobs.lint.steps.1.with",
+		},
+		{
+			name:     "setup go cache enabled",
+			workflow: "pr",
+			old:      "          cache: false",
+			new:      "          cache: true",
+			wantCode: "job.bootstrap",
+			wantPath: "jobs.lint.steps.1.with",
+		},
+		{
+			name:     "protected runner changed",
+			workflow: "pr",
+			old:      "  lint:\n    name: lint\n    runs-on: ubuntu-latest",
+			new:      "  lint:\n    name: lint\n    runs-on: self-hosted",
+			wantCode: "job.runner",
+			wantPath: "jobs.lint.runs-on",
+		},
+		{
+			name:     "job container inserted",
+			workflow: "pr",
+			old:      "  lint:\n    name: lint\n    runs-on: ubuntu-latest",
+			new:      "  lint:\n    name: lint\n    runs-on: ubuntu-latest\n    container: attacker/image:latest",
+			wantCode: "job.structure",
+			wantPath: "jobs.lint.container",
+		},
+		{
+			name:     "job dependency inserted",
+			workflow: "pr",
+			old:      "  lint:\n    name: lint\n    runs-on: ubuntu-latest",
+			new:      "  lint:\n    name: lint\n    runs-on: ubuntu-latest\n    needs: attacker",
+			wantCode: "job.structure",
+			wantPath: "jobs.lint.needs",
+		},
+		{
+			name:     "step shell neutralizes checker",
+			workflow: "pr",
+			old:      "      - run: go run -mod=vendor ./tools/cicontract -root .",
+			new:      "      - run: go run -mod=vendor ./tools/cicontract -root .\n        shell: \"true {0}\"",
+			wantCode: "step.environment",
+			wantPath: "jobs.lint.steps.9.shell",
+		},
+		{
+			name:     "step path neutralizes checker",
+			workflow: "pr",
+			old:      "      - run: go run -mod=vendor ./tools/cicontract -root .",
+			new:      "      - run: go run -mod=vendor ./tools/cicontract -root .\n        env:\n          PATH: /attacker",
+			wantCode: "step.environment",
+			wantPath: "jobs.lint.steps.9.env",
 		},
 		{
 			name:     "narrowed unit race scope",
@@ -287,10 +413,10 @@ func TestHostileWorkflowBypassesFailClosed(t *testing.T) {
 		{
 			name:     "linux arm suite narrowed",
 			workflow: "pr",
-			old:      "    runs-on: ubuntu-24.04-arm\n    timeout-minutes: 15\n    steps:\n      - run: GO=go ./scripts/check-format.sh\n      - run: ./scripts/check-determinism.sh\n      - run: go vet -mod=vendor ./...\n      - run: go test -mod=vendor -race -shuffle=on ./...",
-			new:      "    runs-on: ubuntu-24.04-arm\n    timeout-minutes: 15\n    steps:\n      - run: GO=go ./scripts/check-format.sh\n      - run: ./scripts/check-determinism.sh\n      - run: go vet -mod=vendor ./...\n      - run: go test -mod=vendor -race -shuffle=on ./internal/...",
+			old:      "  linux-arm64-correctness:\n    name: linux-arm64-correctness\n    runs-on: ubuntu-24.04-arm",
+			new:      "  linux-arm64-correctness:\n    name: linux-arm64-correctness\n    runs-on: ubuntu-latest",
 			wantCode: "platform.linux-arm64",
-			wantPath: "jobs.linux-arm64-correctness.steps",
+			wantPath: "jobs.linux-arm64-correctness",
 		},
 	}
 
@@ -322,6 +448,72 @@ func TestApprovedActionPinsAreExact(t *testing.T) {
 	}
 	if diff := diffBoolMap(allowedActionUses, want); diff != "" {
 		t.Fatalf("approved action pins mismatch (-got +want):\n%s", diff)
+	}
+}
+
+func TestHostileBranchProtectionDriftFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		old      string
+		new      string
+		wantPath string
+	}{
+		{name: "administrators bypass", old: `"enforce_admins": true`, new: `"enforce_admins": false`, wantPath: "enforce_admins"},
+		{name: "review omitted", old: `"required_approving_review_count": 1`, new: `"required_approving_review_count": 0`, wantPath: "required_pull_request_reviews.required_approving_review_count"},
+		{name: "stale reviews retained", old: `"dismiss_stale_reviews": true`, new: `"dismiss_stale_reviews": false`, wantPath: "required_pull_request_reviews.dismiss_stale_reviews"},
+		{name: "linear history disabled", old: `"required_linear_history": true`, new: `"required_linear_history": false`, wantPath: "required_linear_history"},
+		{name: "force pushes enabled", old: `"allow_force_pushes": false`, new: `"allow_force_pushes": true`, wantPath: "allow_force_pushes"},
+		{name: "deletions enabled", old: `"allow_deletions": false`, new: `"allow_deletions": true`, wantPath: "allow_deletions"},
+		{name: "restrictions changed", old: `"restrictions": null`, new: `"restrictions": {}`, wantPath: "restrictions"},
+		{
+			name:     "code owner review field added outside normative policy",
+			old:      `"dismiss_stale_reviews": true`,
+			new:      `"dismiss_stale_reviews": true, "require_code_owner_reviews": false`,
+			wantPath: "required_pull_request_reviews.require_code_owner_reviews",
+		},
+		{
+			name:     "conversation resolution field added outside normative policy",
+			old:      `"required_linear_history": true`,
+			new:      `"required_conversation_resolution": false, "required_linear_history": true`,
+			wantPath: "required_conversation_resolution",
+		},
+		{
+			name:     "signed commits field added outside normative policy",
+			old:      `"required_linear_history": true`,
+			new:      `"required_signatures": false, "required_linear_history": true`,
+			wantPath: "required_signatures",
+		},
+		{
+			name:     "required field omitted",
+			old:      "  \"enforce_admins\": true,\n",
+			new:      "",
+			wantPath: "enforce_admins",
+		},
+		{
+			name:     "unknown top level field",
+			old:      `"restrictions": null`,
+			new:      `"restrictions": null, "allow_bypass": true`,
+			wantPath: "allow_bypass",
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			root := copyValidFixture(t)
+			mutateProtection(t, root, test.old, test.new)
+			report, err := Check(root)
+			if err != nil {
+				t.Fatalf("Check(hostile protection fixture): %v", err)
+			}
+			if !hasFinding(report.Findings, "protection.policy", test.wantPath) {
+				t.Fatalf("hostile protection fixture did not report protection.policy at %s; findings:\n%s", test.wantPath, formatFindings(report.Findings))
+			}
+		})
 	}
 }
 
@@ -368,6 +560,23 @@ func mutateWorkflow(t *testing.T, root, workflowName, old, replacement string) {
 	updated := strings.Replace(string(contents), old, replacement, 1)
 	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
 		t.Fatalf("write workflow fixture: %v", err)
+	}
+}
+
+func mutateProtection(t *testing.T, root, old, replacement string) {
+	t.Helper()
+
+	path := filepath.Join(root, ".github", "branch-protection.json")
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read protection fixture: %v", err)
+	}
+	if count := strings.Count(string(contents), old); count != 1 {
+		t.Fatalf("protection mutation source occurs %d times, want 1 in %s: %q", count, path, old)
+	}
+	updated := strings.Replace(string(contents), old, replacement, 1)
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		t.Fatalf("write protection fixture: %v", err)
 	}
 }
 

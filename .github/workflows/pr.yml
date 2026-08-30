@@ -40,6 +40,8 @@ jobs:
         run: '"$(go env GOPATH)/bin/golangci-lint" run'
       - name: Check claims status
         run: go run -mod=vendor ./tools/claimslint .
+      - name: Enforce CI contract
+        run: go run -mod=vendor ./tools/cicontract -root .
   vet:
     name: vet
     runs-on: ubuntu-latest

@@ -14,24 +14,48 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go test -mod=vendor -race ./test/conformance/... ./internal/protocol/...
   integration-nats:
     name: integration-nats
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go test -mod=vendor -race ./internal/bus/nats/... ./test/fault/...
   integration-postgres:
     name: integration-postgres
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go test -mod=vendor -race ./internal/datasource/postgres/...
   socket-hostile:
     name: socket-hostile
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go test -mod=vendor -race ./test/hostile/... ./internal/transport/...
       - name: Retain integration failure evidence
         if: failure()

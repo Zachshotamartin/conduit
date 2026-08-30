@@ -18,5 +18,17 @@
       "integration / integration-postgres",
       "integration / socket-hostile"
     ]
-  }
+  },
+  "enforce_admins": false,
+  "required_pull_request_reviews": {
+    "required_approving_review_count": 0,
+    "dismiss_stale_reviews": false,
+    "require_code_owner_reviews": false
+  },
+  "required_conversation_resolution": false,
+  "required_linear_history": false,
+  "required_signatures": false,
+  "allow_force_pushes": true,
+  "allow_deletions": true,
+  "restrictions": {}
 }

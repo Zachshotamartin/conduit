@@ -150,6 +150,7 @@ var exactProtectedJobCommands = map[string]map[string][]string{
 			`"$(go env GOPATH)/bin/staticcheck" ./...`,
 			`"$(go env GOPATH)/bin/golangci-lint" run`,
 			"go run -mod=vendor ./tools/claimslint .",
+			"go run -mod=vendor ./tools/cicontract -root .",
 		},
 		"vet":              {"go vet -mod=vendor ./..."},
 		"arch-check":       {"go run -mod=vendor ./tools/archcheck"},
@@ -187,6 +188,66 @@ var platformCorrectnessCommands = []string{
 	"go run -mod=vendor ./tools/tracecheck -root .",
 }
 
+var exactJobRunCommands = map[string]map[string][]string{
+	"pr": {
+		"lint": {
+			"GO=go ./scripts/check-format.sh",
+			"./scripts/check-determinism.sh",
+			"go install honnef.co/go/tools/cmd/staticcheck@v0.5.1",
+			`"$(go env GOPATH)/bin/staticcheck" ./...`,
+			"go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2",
+			`"$(go env GOPATH)/bin/golangci-lint" run`,
+			"go run -mod=vendor ./tools/claimslint .",
+			"go run -mod=vendor ./tools/cicontract -root .",
+		},
+		"vet":              {"go vet -mod=vendor ./..."},
+		"arch-check":       {"go run -mod=vendor ./tools/archcheck"},
+		"unit-race":        {"go test -mod=vendor -race -shuffle=on ./..."},
+		"proto-race":       {"go test -mod=vendor -race -shuffle=on ./internal/protocol/..."},
+		"authz-race":       {"go test -mod=vendor -race -shuffle=on ./internal/auth/..."},
+		"index-race":       {"go test -mod=vendor -race -shuffle=on ./internal/filter/index/..."},
+		"docs-status-lint": {"go run -mod=vendor ./tools/docsstatus ./docs", "go run -mod=vendor ./tools/claimslint ."},
+		"metrics-contract": {"go test -mod=vendor ./internal/observability/..."},
+		"deps-audit": {
+			"go test -mod=vendor ./tools/depsaudit",
+			"go run -mod=vendor ./tools/depsaudit -root .",
+			govulncheckInstall,
+			govulncheckRun,
+		},
+		"trace-check": {
+			"go test -mod=vendor ./tools/tracecheck ./internal/observability/... ./internal/transport/...",
+			"go run -mod=vendor ./tools/tracecheck -root .",
+		},
+		"macos-correctness":       append([]string{"go env GOOS GOARCH"}, platformCorrectnessCommands...),
+		"linux-arm64-correctness": append([]string{"go env GOOS GOARCH"}, platformCorrectnessCommands...),
+	},
+	"integration": {
+		"conformance-node":     {"go test -mod=vendor -race ./test/conformance/... ./internal/protocol/..."},
+		"integration-nats":     {"go test -mod=vendor -race ./internal/bus/nats/... ./test/fault/..."},
+		"integration-postgres": {"go test -mod=vendor -race ./internal/datasource/postgres/..."},
+		"socket-hostile":       {"go test -mod=vendor -race ./test/hostile/... ./internal/transport/..."},
+	},
+	"nightly": {
+		"fuzz": {
+			"go test -mod=vendor -race ./internal/protocol/... ./internal/graphql/... ./internal/resume/...",
+			govulncheckInstall,
+			govulncheckRun,
+		},
+		"soak-accelerated":        {"go test -mod=vendor -race ./internal/queue/... ./internal/fanout/..."},
+		"chaos-full":              {"go test -mod=vendor -race ./internal/bus/memory/... ./test/fault/..."},
+		"nats-matrix":             {"go test -mod=vendor -race ./internal/bus/nats/..."},
+		"bench-regression":        {"go test -mod=vendor -bench=. ./..."},
+		"index-property-extended": {"go test -mod=vendor -race ./internal/filter/..."},
+	},
+	"release": {
+		"package":                {"go test -mod=vendor ./cmd/..."},
+		"provenance":             {"go test -mod=vendor ./cmd/... ./internal/observability/..."},
+		"cross-version-fixtures": {"go test -mod=vendor ./test/fixtures/..."},
+		"image-scan":             {"go test -mod=vendor ./cmd/conduit/..."},
+		"kind-install":           {"go test -mod=vendor ./test/conformance/... ./cmd/conduit/..."},
+	},
+}
+
 // Check reads branch-protection.json and the four workflow files below root.
 // Read and syntax failures are returned as errors; semantic drift is returned
 // as sorted Findings so callers can report every violation in one run.
@@ -208,7 +269,9 @@ func Check(root string) (Report, error) {
 		validateWorkflow(&report, relative, parsed, contract)
 	}
 
+	validateProtectionPolicy(&report, protection)
 	validateTriggers(&report, workflows)
+	validateExactRunInventories(&report, workflows)
 	validateRaceJobs(&report, workflows["pr"])
 	validateRequiredCommands(&report, workflows)
 	validateNightlyGovulncheck(&report, workflows["nightly"])
@@ -241,10 +304,7 @@ func Check(root string) (Report, error) {
 }
 
 type protectionFile struct {
-	RequiredStatusChecks struct {
-		Strict   bool     `json:"strict"`
-		Contexts []string `json:"contexts"`
-	} `json:"required_status_checks"`
+	fields map[string]json.RawMessage
 }
 
 func loadProtection(path string) (protectionFile, error) {
@@ -252,11 +312,14 @@ func loadProtection(path string) (protectionFile, error) {
 	if err != nil {
 		return protectionFile{}, fmt.Errorf("read %s: %w", path, err)
 	}
-	var protection protectionFile
-	if err := json.Unmarshal(contents, &protection); err != nil {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(contents, &fields); err != nil {
 		return protectionFile{}, fmt.Errorf("parse %s: %w", path, err)
 	}
-	return protection, nil
+	if fields == nil {
+		return protectionFile{}, fmt.Errorf("parse %s: top-level value must be an object", path)
+	}
+	return protectionFile{fields: fields}, nil
 }
 
 func validateWorkflow(report *Report, file string, workflow *workflow, contract workflowContract) {
@@ -265,6 +328,15 @@ func validateWorkflow(report *Report, file string, workflow *workflow, contract 
 	}
 	if workflow.PermissionScalar != "" || len(workflow.Permissions) != 1 || workflow.Permissions["contents"] != "read" {
 		report.add("workflow.permissions", file, "permissions", "permissions must be exactly contents: read")
+	}
+	if workflow.HasEnv {
+		report.add("workflow.environment", file, "env", "workflow-level environment overrides are forbidden")
+	}
+	if workflow.HasDefaults {
+		report.add("workflow.environment", file, "defaults", "workflow-level run defaults are forbidden")
+	}
+	for _, key := range workflow.UnexpectedKeys {
+		report.add("workflow.structure", file, key, "top-level workflow key is not in the exact contract")
 	}
 
 	wantedJobs := stringSet(contract.jobs)
@@ -281,6 +353,9 @@ func validateWorkflow(report *Report, file string, workflow *workflow, contract 
 		if job.Name != expected {
 			report.add("workflow.jobs", file, "jobs."+expected+".name", fmt.Sprintf("displayed job name is %q, want %q", job.Name, expected))
 		}
+		if job.RunsOn != "ubuntu-latest" {
+			report.add("job.runner", file, "jobs."+expected+".runs-on", fmt.Sprintf("runner is %q, want exactly ubuntu-latest", job.RunsOn))
+		}
 		if job.TimeoutMinutes <= 0 || job.TimeoutMinutes > contract.maxMinutes {
 			report.add("job.timeout", file, "jobs."+expected+".timeout-minutes", fmt.Sprintf("timeout is %d minutes, want 1..%d", job.TimeoutMinutes, contract.maxMinutes))
 		}
@@ -296,17 +371,45 @@ func validateWorkflow(report *Report, file string, workflow *workflow, contract 
 
 	uploads := 0
 	for jobName, job := range workflow.Jobs {
+		validateJobBootstrap(report, file, jobName, job)
 		if job.HasIf {
 			report.add("job.condition", file, "jobs."+jobName+".if", fmt.Sprintf("job-level if condition %q is forbidden because every declared check must report", job.If))
 		}
 		if job.HasContinueOnError {
 			report.add("job.continue-on-error", file, "jobs."+jobName+".continue-on-error", fmt.Sprintf("job-level continue-on-error value %q is forbidden", job.ContinueOnError))
 		}
+		if job.HasEnv {
+			report.add("job.environment", file, "jobs."+jobName+".env", "job-level environment overrides are forbidden")
+		}
+		if job.HasDefaults {
+			report.add("job.environment", file, "jobs."+jobName+".defaults", "job-level run defaults are forbidden")
+		}
+		for _, key := range job.UnexpectedKeys {
+			report.add("job.structure", file, "jobs."+jobName+"."+key, "job key is not in the exact contract")
+		}
 		if job.Uses != "" {
 			report.add("action.pin", file, "jobs."+jobName+".uses", fmt.Sprintf("job-level reusable workflow use %q is not approved", job.Uses))
 		}
 		for stepIndex, step := range job.Steps {
 			stepPath := fmt.Sprintf("jobs.%s.steps.%d", jobName, stepIndex)
+			if step.HasShell {
+				report.add("step.environment", file, stepPath+".shell", fmt.Sprintf("step-level shell override %q is forbidden", step.Shell))
+			}
+			if step.HasWorkingDirectory {
+				report.add("step.environment", file, stepPath+".working-directory", fmt.Sprintf("step-level working-directory override %q is forbidden", step.WorkingDirectory))
+			}
+			if step.HasEnv && !allowedStepEnvironment(step) {
+				report.add("step.environment", file, stepPath+".env", "step environment must be absent or exactly GOFLAGS=-mod=vendor on an approved analyzer command")
+			}
+			for _, key := range step.UnexpectedKeys {
+				report.add("step.structure", file, stepPath+"."+key, "step key is not in the exact contract")
+			}
+			if step.Run != "" && step.Uses != "" {
+				report.add("step.structure", file, stepPath, "a step cannot contain both run and uses")
+			}
+			if step.Run != "" && len(step.With) != 0 {
+				report.add("step.structure", file, stepPath+".with", "run steps cannot contain action inputs")
+			}
 			if step.HasIf && !isUploadArtifact(step.Uses) {
 				report.add("step.condition", file, stepPath+".if", fmt.Sprintf("step-level if condition %q is allowed only on upload-artifact evidence steps", step.If))
 			}
@@ -334,6 +437,69 @@ func validateWorkflow(report *Report, file string, workflow *workflow, contract 
 	if uploads == 0 {
 		report.add("artifact.retention", file, "jobs", fmt.Sprintf("workflow must upload diagnostic evidence with %d-day retention", contract.retentionDays))
 	}
+}
+
+func validateJobBootstrap(report *Report, file, jobName string, job *workflowJob) {
+	checkoutCount := 0
+	setupGoCount := 0
+	for stepIndex, step := range job.Steps {
+		stepPath := fmt.Sprintf("jobs.%s.steps.%d", jobName, stepIndex)
+		if step.Uses == checkoutActionUse {
+			checkoutCount++
+			if len(step.With) != 0 {
+				report.add("job.bootstrap", file, stepPath+".with", "checkout must not receive configuration")
+			}
+		}
+		if step.Uses != setupGoActionUse {
+			continue
+		}
+		setupGoCount++
+		want := map[string]string{
+			"go-version":   "1.23.12",
+			"check-latest": "false",
+			"cache":        "false",
+		}
+		if !equalStringMap(step.With, want) {
+			report.add("job.bootstrap", file, stepPath+".with", "setup-go configuration must be exactly go-version=1.23.12, check-latest=false, cache=false")
+		}
+	}
+	if len(job.Steps) == 0 || job.Steps[0].Uses != checkoutActionUse {
+		report.add("job.bootstrap", file, "jobs."+jobName+".steps.0", "checkout must be the first job step")
+	}
+	if len(job.Steps) < 2 || job.Steps[1].Uses != setupGoActionUse {
+		report.add("job.bootstrap", file, "jobs."+jobName+".steps.1", "setup-go must be the second job step")
+	}
+	if checkoutCount != 1 {
+		report.add("job.bootstrap", file, "jobs."+jobName+".steps", fmt.Sprintf("job must contain exactly one checkout step pinned to %s; found %d", checkoutActionUse, checkoutCount))
+	}
+	if setupGoCount != 1 {
+		report.add("job.bootstrap", file, "jobs."+jobName+".steps", fmt.Sprintf("job must contain exactly one setup-go step pinned to %s; found %d", setupGoActionUse, setupGoCount))
+	}
+}
+
+func allowedStepEnvironment(step workflowStep) bool {
+	if !step.HasEnv {
+		return true
+	}
+	if !equalStringMap(step.Env, map[string]string{"GOFLAGS": "-mod=vendor"}) {
+		return false
+	}
+	command := strings.TrimSpace(step.Run)
+	return command == `"$(go env GOPATH)/bin/staticcheck" ./...` ||
+		command == `"$(go env GOPATH)/bin/golangci-lint" run` ||
+		command == govulncheckRun
+}
+
+func equalStringMap(left, right map[string]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key, value := range right {
+		if left[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func validateTriggers(report *Report, workflows map[string]*workflow) {
@@ -384,6 +550,40 @@ func validateRequiredCommands(report *Report, workflows map[string]*workflow) {
 			requireExactJobCommands(report, workflowName, workflow, jobName, required)
 		}
 	}
+}
+
+func validateExactRunInventories(report *Report, workflows map[string]*workflow) {
+	for workflowName, jobs := range exactJobRunCommands {
+		workflow := workflows[workflowName]
+		for jobName, want := range jobs {
+			job := workflow.Jobs[jobName]
+			if job == nil {
+				continue
+			}
+			got := make([]string, 0, len(job.Steps))
+			for _, step := range job.Steps {
+				if step.Run != "" {
+					got = append(got, strings.TrimSpace(step.Run))
+				}
+			}
+			if equalStringSlice(got, want) {
+				continue
+			}
+			report.add("job.command-inventory", workflowFile(workflowName), "jobs."+jobName+".steps", fmt.Sprintf("run command sequence is %q, want exact sequence %q", got, want))
+		}
+	}
+}
+
+func equalStringSlice(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range right {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func requireExactJobCommands(report *Report, workflowName string, workflow *workflow, jobName string, required []string) {
@@ -505,10 +705,124 @@ func cleanShellToken(token string) string {
 	return strings.Trim(token, "\"'()")
 }
 
+func validateProtectionPolicy(report *Report, protection protectionFile) {
+	const file = ".github/branch-protection.json"
+	validateJSONFields(report, "protection.policy", file, "", protection.fields, []string{
+		"required_status_checks",
+		"enforce_admins",
+		"required_pull_request_reviews",
+		"required_linear_history",
+		"allow_force_pushes",
+		"allow_deletions",
+		"restrictions",
+	})
+	validateJSONBool(report, "protection.policy", file, protection.fields, "enforce_admins", true)
+	validateJSONBool(report, "protection.policy", file, protection.fields, "required_linear_history", true)
+	validateJSONBool(report, "protection.policy", file, protection.fields, "allow_force_pushes", false)
+	validateJSONBool(report, "protection.policy", file, protection.fields, "allow_deletions", false)
+
+	restrictions, exists := protection.fields["restrictions"]
+	if exists && strings.TrimSpace(string(restrictions)) != "null" {
+		report.add("protection.policy", file, "restrictions", "restrictions must be exactly null")
+	}
+
+	reviews, ok := jsonObject(report, "protection.policy", file, "required_pull_request_reviews", protection.fields["required_pull_request_reviews"])
+	if !ok {
+		return
+	}
+	validateJSONFields(report, "protection.policy", file, "required_pull_request_reviews", reviews, []string{
+		"required_approving_review_count",
+		"dismiss_stale_reviews",
+	})
+	validateJSONInteger(report, "protection.policy", file, reviews, "required_pull_request_reviews.required_approving_review_count", "required_approving_review_count", 1)
+	validateJSONBoolAt(report, "protection.policy", file, reviews, "required_pull_request_reviews.dismiss_stale_reviews", "dismiss_stale_reviews", true)
+}
+
+func validateJSONFields(report *Report, code, file, prefix string, fields map[string]json.RawMessage, expected []string) {
+	wanted := stringSet(expected)
+	for _, field := range expected {
+		if _, exists := fields[field]; exists {
+			continue
+		}
+		report.add(code, file, joinJSONPath(prefix, field), "required policy field is missing")
+	}
+	for field := range fields {
+		if wanted[field] {
+			continue
+		}
+		report.add(code, file, joinJSONPath(prefix, field), "field is not part of the exact normative policy")
+	}
+}
+
+func validateJSONBool(report *Report, code, file string, fields map[string]json.RawMessage, key string, want bool) {
+	validateJSONBoolAt(report, code, file, fields, key, key, want)
+}
+
+func validateJSONBoolAt(report *Report, code, file string, fields map[string]json.RawMessage, path, key string, want bool) {
+	raw, exists := fields[key]
+	if !exists {
+		return
+	}
+	var got bool
+	trimmed := strings.TrimSpace(string(raw))
+	if err := json.Unmarshal(raw, &got); err != nil || (trimmed != "true" && trimmed != "false") {
+		report.add(code, file, path, fmt.Sprintf("value must be the boolean %t", want))
+		return
+	}
+	if got != want {
+		report.add(code, file, path, fmt.Sprintf("value is %t, want %t", got, want))
+	}
+}
+
+func validateJSONInteger(report *Report, code, file string, fields map[string]json.RawMessage, path, key string, want int) {
+	raw, exists := fields[key]
+	if !exists {
+		return
+	}
+	var got int
+	if err := json.Unmarshal(raw, &got); err != nil {
+		report.add(code, file, path, fmt.Sprintf("value must be the integer %d", want))
+		return
+	}
+	if got != want {
+		report.add(code, file, path, fmt.Sprintf("value is %d, want %d", got, want))
+	}
+}
+
+func jsonObject(report *Report, code, file, path string, raw json.RawMessage) (map[string]json.RawMessage, bool) {
+	if len(raw) == 0 {
+		return nil, false
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil || object == nil {
+		report.add(code, file, path, "value must be an object")
+		return nil, false
+	}
+	return object, true
+}
+
+func joinJSONPath(prefix, field string) string {
+	if prefix == "" {
+		return field
+	}
+	return prefix + "." + field
+}
+
 func validateContexts(report *Report, protection protectionFile, workflows map[string]*workflow) {
 	file := filepath.Join(".github", "branch-protection.json")
-	if !protection.RequiredStatusChecks.Strict {
-		report.add("protection.context", file, "required_status_checks.strict", "required status checks must be strict")
+	checks, ok := jsonObject(report, "protection.context", file, "required_status_checks", protection.fields["required_status_checks"])
+	if !ok {
+		return
+	}
+	validateJSONFields(report, "protection.context", file, "required_status_checks", checks, []string{"strict", "contexts"})
+	validateJSONBoolAt(report, "protection.context", file, checks, "required_status_checks.strict", "strict", true)
+
+	var contexts []string
+	if raw, exists := checks["contexts"]; exists {
+		if err := json.Unmarshal(raw, &contexts); err != nil || contexts == nil {
+			report.add("protection.context", file, "required_status_checks.contexts", "contexts must be an array of strings")
+			return
+		}
 	}
 
 	expected := make(map[string]ContextMapping)
@@ -518,8 +832,8 @@ func validateContexts(report *Report, protection protectionFile, workflows map[s
 			expected[context] = ContextMapping{Context: context, Workflow: contract.name, Job: job}
 		}
 	}
-	protected := make(map[string]bool, len(protection.RequiredStatusChecks.Contexts))
-	for _, context := range protection.RequiredStatusChecks.Contexts {
+	protected := make(map[string]bool, len(contexts))
+	for _, context := range contexts {
 		if protected[context] {
 			report.add("protection.context", file, "required_status_checks.contexts", fmt.Sprintf("context %q is duplicated", context))
 		}
@@ -598,6 +912,9 @@ type workflow struct {
 	Permissions      map[string]string
 	PermissionScalar string
 	Jobs             map[string]*workflowJob
+	HasEnv           bool
+	HasDefaults      bool
+	UnexpectedKeys   []string
 }
 
 type workflowEvent struct {
@@ -617,17 +934,27 @@ type workflowJob struct {
 	If                 string
 	HasContinueOnError bool
 	ContinueOnError    string
+	HasEnv             bool
+	HasDefaults        bool
 	Steps              []workflowStep
+	UnexpectedKeys     []string
 }
 
 type workflowStep struct {
-	Run                string
-	Uses               string
-	HasIf              bool
-	If                 string
-	HasContinueOnError bool
-	ContinueOnError    string
-	With               map[string]string
+	Run                 string
+	Uses                string
+	HasIf               bool
+	If                  string
+	HasContinueOnError  bool
+	ContinueOnError     string
+	With                map[string]string
+	HasEnv              bool
+	Env                 map[string]string
+	HasShell            bool
+	Shell               string
+	HasWorkingDirectory bool
+	WorkingDirectory    string
+	UnexpectedKeys      []string
 }
 
 func (workflow *workflow) hasEvent(name string) bool {
@@ -667,6 +994,7 @@ func parseWorkflow(path string) (*workflow, error) {
 	inSteps := false
 	currentStep := -1
 	inWith := false
+	inEnv := false
 	for _, line := range lines {
 		pairText := line.text
 		sequenceItem := strings.HasPrefix(pairText, "- ")
@@ -690,6 +1018,7 @@ func parseWorkflow(path string) (*workflow, error) {
 			inSteps = false
 			currentStep = -1
 			inWith = false
+			inEnv = false
 			switch key {
 			case "name":
 				result.Name = scalar(value)
@@ -697,8 +1026,15 @@ func parseWorkflow(path string) (*workflow, error) {
 				if hasValue {
 					result.PermissionScalar = scalar(value)
 				}
+			case "env":
+				result.HasEnv = true
+				section = ""
+			case "defaults":
+				result.HasDefaults = true
+				section = ""
 			case "on", "jobs":
 			default:
+				result.UnexpectedKeys = append(result.UnexpectedKeys, key)
 				section = ""
 			}
 			continue
@@ -748,6 +1084,7 @@ func parseWorkflow(path string) (*workflow, error) {
 				inSteps = false
 				currentStep = -1
 				inWith = false
+				inEnv = false
 				continue
 			}
 			if currentJob == "" {
@@ -756,6 +1093,7 @@ func parseWorkflow(path string) (*workflow, error) {
 			job := result.Jobs[currentJob]
 			if line.indent == 4 {
 				inWith = false
+				inEnv = false
 				switch key {
 				case "name":
 					job.Name = scalar(value)
@@ -777,8 +1115,14 @@ func parseWorkflow(path string) (*workflow, error) {
 					job.TimeoutMinutes = minutes
 				case "permissions":
 					job.HasPermissions = true
+				case "env":
+					job.HasEnv = true
+				case "defaults":
+					job.HasDefaults = true
 				case "steps":
 					inSteps = true
+				default:
+					job.UnexpectedKeys = append(job.UnexpectedKeys, key)
 				}
 				continue
 			}
@@ -786,9 +1130,10 @@ func parseWorkflow(path string) (*workflow, error) {
 				continue
 			}
 			if line.indent == 6 && strings.HasPrefix(line.text, "- ") {
-				job.Steps = append(job.Steps, workflowStep{With: make(map[string]string)})
+				job.Steps = append(job.Steps, workflowStep{With: make(map[string]string), Env: make(map[string]string)})
 				currentStep = len(job.Steps) - 1
 				inWith = false
+				inEnv = false
 				item := strings.TrimSpace(strings.TrimPrefix(line.text, "- "))
 				if item != "" {
 					itemKey, itemValue, _, itemErr := splitYAMLPair(item)
@@ -805,13 +1150,19 @@ func parseWorkflow(path string) (*workflow, error) {
 			step := &job.Steps[currentStep]
 			if line.indent == 8 {
 				inWith = key == "with"
-				if !inWith {
+				inEnv = key == "env"
+				if inEnv {
+					step.HasEnv = true
+				}
+				if !inWith && !inEnv {
 					assignStepValue(step, key, scalar(value))
 				}
 				continue
 			}
 			if line.indent == 10 && inWith {
 				step.With[key] = scalar(value)
+			} else if line.indent == 10 && inEnv {
+				step.Env[key] = scalar(value)
 			}
 		}
 	}
@@ -914,5 +1265,14 @@ func assignStepValue(step *workflowStep, key, value string) {
 	case "continue-on-error":
 		step.HasContinueOnError = true
 		step.ContinueOnError = value
+	case "shell":
+		step.HasShell = true
+		step.Shell = value
+	case "working-directory":
+		step.HasWorkingDirectory = true
+		step.WorkingDirectory = value
+	case "name":
+	default:
+		step.UnexpectedKeys = append(step.UnexpectedKeys, key)
 	}
 }

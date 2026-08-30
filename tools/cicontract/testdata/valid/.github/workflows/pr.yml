@@ -14,28 +14,55 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: GO=go ./scripts/check-format.sh
       - run: ./scripts/check-determinism.sh
+      - run: go install honnef.co/go/tools/cmd/staticcheck@v0.5.1
       - run: '"$(go env GOPATH)/bin/staticcheck" ./...'
+      - run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2
       - run: '"$(go env GOPATH)/bin/golangci-lint" run'
       - run: go run -mod=vendor ./tools/claimslint .
+      - run: go run -mod=vendor ./tools/cicontract -root .
   vet:
     name: vet
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go vet -mod=vendor ./...
   arch-check:
     name: arch-check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go run -mod=vendor ./tools/archcheck
   unit-race:
     name: unit-race
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go test -mod=vendor -race -shuffle=on ./...
       - name: Retain failure evidence
         if: failure()
@@ -49,24 +76,48 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go test -mod=vendor -race -shuffle=on ./internal/protocol/...
   authz-race:
     name: authz-race
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go test -mod=vendor -race -shuffle=on ./internal/auth/...
   index-race:
     name: index-race
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go test -mod=vendor -race -shuffle=on ./internal/filter/index/...
   docs-status-lint:
     name: docs-status-lint
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go run -mod=vendor ./tools/docsstatus ./docs
       - run: go run -mod=vendor ./tools/claimslint .
   metrics-contract:
@@ -74,12 +125,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go test -mod=vendor ./internal/observability/...
   deps-audit:
     name: deps-audit
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go test -mod=vendor ./tools/depsaudit
       - run: go run -mod=vendor ./tools/depsaudit -root .
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
@@ -89,6 +152,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
       - run: go test -mod=vendor ./tools/tracecheck ./internal/observability/... ./internal/transport/...
       - run: go run -mod=vendor ./tools/tracecheck -root .
   macos-correctness:
@@ -96,6 +165,13 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
+      - run: go env GOOS GOARCH
       - run: GO=go ./scripts/check-format.sh
       - run: ./scripts/check-determinism.sh
       - run: go vet -mod=vendor ./...
@@ -111,6 +187,13 @@ jobs:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.23.12"
+          check-latest: false
+          cache: false
+      - run: go env GOOS GOARCH
       - run: GO=go ./scripts/check-format.sh
       - run: ./scripts/check-determinism.sh
       - run: go vet -mod=vendor ./...
