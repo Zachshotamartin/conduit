@@ -1,8 +1,11 @@
 package errors
 
 import (
+	"bytes"
 	"encoding/json"
 	stderrors "errors"
+	"fmt"
+	"io"
 )
 
 // Category is a stable, bounded classification for a Conduit failure.
@@ -116,7 +119,9 @@ func Wrap(category Category, cause error) *Error {
 }
 
 // WrapUnknown classifies an untyped failure once at its owning boundary.
-// Error chains that already contain an Error are returned unchanged.
+// A top-level Error is returned unchanged. If an Error is hidden beneath an
+// arbitrary wrapper, WrapUnknown preserves that diagnostic chain behind a
+// new client-safe Error carrying the existing category.
 func WrapUnknown(err error) error {
 	if err == nil {
 		return nil
@@ -124,7 +129,10 @@ func WrapUnknown(err error) error {
 
 	var typed *Error
 	if stderrors.As(err, &typed) {
-		return err
+		if err == typed {
+			return typed
+		}
+		return Wrap(typed.Category(), err)
 	}
 
 	return Wrap(InternalInvariant, err)
@@ -168,6 +176,42 @@ func (e *Error) MarshalJSON() ([]byte, error) {
 		Message:  e.SafeMessage(),
 	}
 	return json.Marshal(payload)
+}
+
+// UnmarshalJSON accepts only the canonical client-safe representation. It
+// rejects unknown categories, noncanonical messages, and extra fields so a
+// decoded Error cannot smuggle unbounded or sensitive text onto a boundary.
+func (e *Error) UnmarshalJSON(data []byte) error {
+	if e == nil {
+		return fmt.Errorf("decode conduit error into nil receiver")
+	}
+
+	payload := struct {
+		Category Category `json:"category"`
+		Message  string   `json:"message"`
+	}{}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil {
+		return fmt.Errorf("decode conduit error: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("decode conduit error: multiple JSON values")
+		}
+		return fmt.Errorf("decode conduit error trailing data: %w", err)
+	}
+
+	definition, known := definitions[payload.Category]
+	if !known {
+		return fmt.Errorf("decode conduit error: unknown category %q", payload.Category)
+	}
+	if payload.Message != definition.safeMessage {
+		return fmt.Errorf("decode conduit error: noncanonical message for category %q", payload.Category)
+	}
+
+	*e = Error{category: payload.Category}
+	return nil
 }
 
 func (e *Error) rawCategory() Category {
