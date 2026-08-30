@@ -220,22 +220,22 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintf(stderr, "determinismcheck: unexpected arguments: %v\n", flags.Args())
+		_, _ = fmt.Fprintf(stderr, "determinismcheck: unexpected arguments: %v\n", flags.Args())
 		return 2
 	}
 
 	violations, err := Check(*root)
 	if err != nil {
-		fmt.Fprintf(stderr, "determinismcheck: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "determinismcheck: %v\n", err)
 		return 2
 	}
 	for _, violation := range violations {
-		fmt.Fprintln(stderr, violation.String())
+		_, _ = fmt.Fprintln(stderr, violation.String())
 	}
 	if len(violations) != 0 {
 		return 1
 	}
-	fmt.Fprintln(stdout, "determinismcheck: no violations")
+	_, _ = fmt.Fprintln(stdout, "determinismcheck: no violations")
 	return 0
 }
 

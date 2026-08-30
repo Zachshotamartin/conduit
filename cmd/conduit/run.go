@@ -29,11 +29,11 @@ func Run(
 		stderr = io.Discard
 	}
 	if err := ctx.Err(); err != nil {
-		fmt.Fprintf(stderr, "conduit: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "conduit: %v\n", err)
 		return codeOrFallback("fatal", 1)
 	}
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: conduit validate [--config path]")
+		_, _ = fmt.Fprintln(stderr, "usage: conduit validate [--config path]")
 		return codeOrFallback("fatal", 1)
 	}
 
@@ -41,7 +41,7 @@ func Run(
 	case "validate":
 		return runValidate(ctx, args[1:], environment, stdout, stderr)
 	default:
-		fmt.Fprintf(stderr, "conduit: unsupported command %q\n", args[0])
+		_, _ = fmt.Fprintf(stderr, "conduit: unsupported command %q\n", args[0])
 		return codeOrFallback("fatal", 1)
 	}
 }
@@ -61,11 +61,11 @@ func runValidate(
 		return failureCode
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintf(stderr, "conduit validate: unexpected arguments: %v\n", flags.Args())
+		_, _ = fmt.Fprintf(stderr, "conduit validate: unexpected arguments: %v\n", flags.Args())
 		return failureCode
 	}
 	if err := ctx.Err(); err != nil {
-		fmt.Fprintf(stderr, "conduit: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "conduit: %v\n", err)
 		return codeOrFallback("fatal", 1)
 	}
 
@@ -74,11 +74,11 @@ func runValidate(
 		Environment: environment,
 	})
 	if err != nil {
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 		return failureCode
 	}
 	if err := ctx.Err(); err != nil {
-		fmt.Fprintf(stderr, "conduit: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "conduit: %v\n", err)
 		return codeOrFallback("fatal", 1)
 	}
 
@@ -86,15 +86,15 @@ func runValidate(
 		FilePath:    location.Path,
 		Environment: environment,
 	}); err != nil {
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 		return failureCode
 	}
 	if err := ctx.Err(); err != nil {
-		fmt.Fprintf(stderr, "conduit: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "conduit: %v\n", err)
 		return codeOrFallback("fatal", 1)
 	}
 
-	fmt.Fprintln(stdout, "configuration valid")
+	_, _ = fmt.Fprintln(stdout, "configuration valid")
 	return 0
 }
 

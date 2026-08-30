@@ -20,7 +20,7 @@ func TestExtractRequirementIDsUsesOnlyPRDSectionsSevenAndNine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open fixture PRD: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	got, err := ExtractRequirementIDs(file)
 	if err != nil {
@@ -39,7 +39,7 @@ func TestRealPRDRequirementInventoryIsExact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open real PRD: %v", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	got, err := ExtractRequirementIDs(file)
 	if err != nil {

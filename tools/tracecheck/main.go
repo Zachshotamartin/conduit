@@ -20,7 +20,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintf(stderr, "tracecheck: unexpected arguments: %v\n", flags.Args())
+		_, _ = fmt.Fprintf(stderr, "tracecheck: unexpected arguments: %v\n", flags.Args())
 		return 2
 	}
 
@@ -44,17 +44,17 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	violations, err := Check(ctx, options)
 	if err != nil {
-		fmt.Fprintf(stderr, "tracecheck: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "tracecheck: %v\n", err)
 		return 2
 	}
 	if len(violations) != 0 {
 		for _, violation := range violations {
-			fmt.Fprintln(stderr, violation.String())
+			_, _ = fmt.Fprintln(stderr, violation.String())
 		}
 		return 1
 	}
 
-	fmt.Fprintln(stdout, "tracecheck: no violations")
+	_, _ = fmt.Fprintln(stdout, "tracecheck: no violations")
 	return 0
 }
 

@@ -18,7 +18,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if flags.NArg() != 0 {
-		fmt.Fprintf(stderr, "depsaudit: unexpected arguments: %v\n", flags.Args())
+		_, _ = fmt.Fprintf(stderr, "depsaudit: unexpected arguments: %v\n", flags.Args())
 		return 2
 	}
 
@@ -27,17 +27,17 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		GateStatusPath: filepath.Join(*root, "docs", "gate-status.json"),
 	})
 	if err != nil {
-		fmt.Fprintf(stderr, "depsaudit: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "depsaudit: %v\n", err)
 		return 2
 	}
 	if len(findings) != 0 {
 		for _, finding := range findings {
-			fmt.Fprintln(stderr, finding.String())
+			_, _ = fmt.Fprintln(stderr, finding.String())
 		}
 		return 1
 	}
 
-	fmt.Fprintln(stdout, "depsaudit: no findings")
+	_, _ = fmt.Fprintln(stdout, "depsaudit: no findings")
 	return 0
 }
 

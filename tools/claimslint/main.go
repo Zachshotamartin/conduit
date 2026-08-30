@@ -472,16 +472,16 @@ func main() {
 	if len(os.Args) == 2 {
 		root = os.Args[1]
 	} else if len(os.Args) > 2 {
-		fmt.Fprintln(os.Stderr, "usage: claimslint [repository-root]")
+		_, _ = fmt.Fprintln(os.Stderr, "usage: claimslint [repository-root]")
 		os.Exit(2)
 	}
 	violations, err := lintClaims(root)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "claims lint: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "claims lint: %v\n", err)
 		os.Exit(2)
 	}
 	for _, item := range violations {
-		fmt.Fprintln(os.Stderr, item.String())
+		_, _ = fmt.Fprintln(os.Stderr, item.String())
 	}
 	if len(violations) != 0 {
 		os.Exit(1)

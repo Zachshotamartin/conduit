@@ -241,7 +241,7 @@ func extractRequirementsFile(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open PRODUCT_REQUIREMENTS %s: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	ids, err := ExtractRequirementIDs(file)
 	if err != nil {
 		return nil, fmt.Errorf("extract PRODUCT_REQUIREMENTS %s: %w", path, err)
@@ -292,7 +292,7 @@ func extractBuildOwners(path string) (map[string]int, []string, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("open BUILD_PLAN %s: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	content, err := scanSections(file, map[int]bool{19: true})
 	if err != nil {
 		return nil, nil, fmt.Errorf("scan BUILD_PLAN %s: %w", path, err)
@@ -386,7 +386,7 @@ func extractMatrixRows(path string) ([]matrixRow, []string, []citation, error) {
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("open OPERATIONS_TEST_PLAN %s: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	content, err := scanSections(file, map[int]bool{10: true})
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("scan OPERATIONS_TEST_PLAN %s: %w", path, err)

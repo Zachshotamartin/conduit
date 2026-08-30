@@ -584,7 +584,7 @@ func readDependencyReviewManifest(path string) (dependencyReviewManifest, error)
 	if err != nil {
 		return dependencyReviewManifest{}, fmt.Errorf("read dependency reviews %s: %w", path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	decoder := json.NewDecoder(file)
 	decoder.DisallowUnknownFields()

@@ -209,7 +209,7 @@ func validateRules(rules []Rule) error {
 				positiveSelectors++
 			}
 		}
-		if positiveSelectors == 0 && !(len(selectorPatterns) == 1 && selectorPatterns[0] == "!**") {
+		if positiveSelectors == 0 && (len(selectorPatterns) != 1 || selectorPatterns[0] != "!**") {
 			return fmt.Errorf("rule %s Package must contain a positive selector", rule.ID)
 		}
 		if _, err := matchSelector("internal/example", rule.Package); err != nil {

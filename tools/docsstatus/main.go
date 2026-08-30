@@ -62,7 +62,7 @@ func lintDocument(path string, allowDeferredLanguage bool) ([]violation, error) 
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var violations []violation
 	scanner := bufio.NewScanner(file)
@@ -170,16 +170,16 @@ func main() {
 	if len(os.Args) == 2 {
 		root = os.Args[1]
 	} else if len(os.Args) > 2 {
-		fmt.Fprintln(os.Stderr, "usage: docsstatus [docs-directory]")
+		_, _ = fmt.Fprintln(os.Stderr, "usage: docsstatus [docs-directory]")
 		os.Exit(2)
 	}
 	violations, err := lintDocs(root)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "docs-status lint: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "docs-status lint: %v\n", err)
 		os.Exit(2)
 	}
 	for _, item := range violations {
-		fmt.Fprintln(os.Stderr, item.String())
+		_, _ = fmt.Fprintln(os.Stderr, item.String())
 	}
 	if len(violations) != 0 {
 		os.Exit(1)
