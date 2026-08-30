@@ -36,6 +36,36 @@ func TestLintDocsRejectsMissingStatus(t *testing.T) {
 	}
 }
 
+func TestLintDocsRejectsQuotedForbiddenPhraseInTemplate(t *testing.T) {
+	t.Parallel()
+
+	violations, err := lintDocs(filepath.Join("testdata", "quoted-template", "docs"))
+	if err != nil {
+		t.Fatalf("lint docs: %v", err)
+	}
+	if len(violations) != 1 {
+		t.Fatalf("violations = %v, want one", violations)
+	}
+	if !strings.Contains(violations[0].Message, "forbidden phrase") {
+		t.Fatalf("message = %q, want forbidden phrase", violations[0].Message)
+	}
+}
+
+func TestLintDocsRequiresAnExplicitStatusDeclaration(t *testing.T) {
+	t.Parallel()
+
+	violations, err := lintDocs(filepath.Join("testdata", "prose-status", "docs"))
+	if err != nil {
+		t.Fatalf("lint docs: %v", err)
+	}
+	if len(violations) != 1 {
+		t.Fatalf("violations = %v, want one", violations)
+	}
+	if !strings.Contains(violations[0].Message, "status declaration") {
+		t.Fatalf("message = %q, want explicit status declaration", violations[0].Message)
+	}
+}
+
 func TestLintDocsAllowsMetaLanguageAndOpenQuestions(t *testing.T) {
 	t.Parallel()
 
