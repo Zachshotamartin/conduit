@@ -1,0 +1,21 @@
+name: release
+
+on:
+  push:
+    tags: ["release-*"]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: package-renamed
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - run: "true"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: short-lived-release-diagnostics
+          path: reports/release/
+          retention-days: 30

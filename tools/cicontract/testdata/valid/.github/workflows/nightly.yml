@@ -1,0 +1,65 @@
+name: nightly
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: fuzz
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    steps:
+      - run: "true"
+      - name: Retain fuzz corpora
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpora
+          path: testdata/fuzz/
+          retention-days: 90
+  soak-accelerated:
+    name: soak-accelerated
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    steps:
+      - run: "true"
+      - name: Retain soak captures
+        uses: actions/upload-artifact@v4
+        with:
+          name: soak-captures
+          path: reports/soak/
+          retention-days: 90
+  chaos-full:
+    name: chaos-full
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    steps:
+      - run: "true"
+      - name: Retain chaos captures
+        uses: actions/upload-artifact@v4
+        with:
+          name: chaos-captures
+          path: reports/chaos/
+          retention-days: 90
+  nats-matrix:
+    name: nats-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    steps:
+      - run: "true"
+  bench-regression:
+    name: bench-regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    steps:
+      - run: "true"
+  index-property-extended:
+    name: index-property-extended
+    runs-on: ubuntu-latest
+    timeout-minutes: 480
+    steps:
+      - run: "true"

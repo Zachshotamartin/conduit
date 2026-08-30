@@ -1,0 +1,47 @@
+name: integration
+
+on:
+  pull_request:
+    paths:
+      - internal/transport/**
+      - internal/bus/**
+      - internal/datasource/**
+      - internal/auth/**
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  conformance-node:
+    name: conformance-node
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - run: "true"
+  integration-nats:
+    name: integration-nats
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - run: "true"
+  integration-postgres:
+    name: integration-postgres
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - run: "true"
+  socket-hostile:
+    name: socket-hostile
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - run: "true"
+      - name: Retain integration failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-failure-evidence
+          path: reports/
+          retention-days: 30

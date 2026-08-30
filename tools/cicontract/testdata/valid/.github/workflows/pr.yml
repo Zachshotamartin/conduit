@@ -1,0 +1,84 @@
+name: pr
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: staticcheck ./...
+  vet:
+    name: vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: go vet ./...
+  arch-check:
+    name: arch-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: go run ./tools/archcheck
+  unit-race:
+    name: unit-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: go test -race ./...
+      - name: Retain failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-failure-evidence
+          path: reports/
+          retention-days: 30
+  proto-race:
+    name: proto-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: go test -race ./internal/protocol/...
+  authz-race:
+    name: authz-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: go test -race ./internal/auth/...
+  index-race:
+    name: index-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: go test -race ./internal/filter/index/...
+  docs-status-lint:
+    name: docs-status-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: go run ./tools/docsstatus
+  metrics-contract:
+    name: metrics-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: go test ./internal/observability/...
+  deps-audit:
+    name: deps-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: govulncheck ./...
+  trace-check:
+    name: trace-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: go test ./...
