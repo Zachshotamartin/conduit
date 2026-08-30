@@ -1,0 +1,6 @@
+listener:
+  client:
+    port: 70000
+limits:
+  max_message_bytes: 1048576
+  outbound_queue_bytes: 524288

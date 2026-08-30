@@ -1,0 +1,20 @@
+listener:
+  client:
+    port: 7101
+    transport: plaintext
+    plaintext_acknowledged: true
+limits:
+  max_message_bytes: 524288
+  outbound_queue_bytes: 1048576
+connection:
+  keepalive: 25s
+  idle_timeout: 5m
+  drain_window: 60s
+auth:
+  mode: none
+  development_acknowledged: true
+  expiry_warning_window: 30s
+  token_lifetime_floor: 5m
+tenancy:
+  enabled: false
+  schema_sets: []

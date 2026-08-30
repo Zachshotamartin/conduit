@@ -1,0 +1,27 @@
+[
+  {
+    "reason": "drain_complete",
+    "code": 0,
+    "description": "graceful drain completed"
+  },
+  {
+    "reason": "fatal",
+    "code": 1,
+    "description": "unclassified fatal process failure"
+  },
+  {
+    "reason": "validate_failure",
+    "code": 2,
+    "description": "configuration validation failed"
+  },
+  {
+    "reason": "doctor_failure",
+    "code": 3,
+    "description": "one or more doctor checks failed"
+  },
+  {
+    "reason": "bind_failure",
+    "code": 4,
+    "description": "required listener could not bind"
+  }
+]
