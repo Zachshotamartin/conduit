@@ -36,11 +36,27 @@ type Operation struct {
 	document *gqlast.QueryDocument
 }
 
+// OperationCount returns the number of operation definitions admitted from
+// the document without exposing the parser-owned AST.
+func (operation *Operation) OperationCount() int {
+	if operation == nil || operation.document == nil {
+		return 0
+	}
+	return len(operation.document.Operations)
+}
+
+// FragmentCount returns the number of named fragment definitions admitted
+// from the document without exposing the parser-owned AST.
+func (operation *Operation) FragmentCount() int {
+	if operation == nil || operation.document == nil {
+		return 0
+	}
+	return len(operation.document.Fragments)
+}
+
 // Schema is Conduit's opaque representation of a validated GraphQL schema.
 // Schema construction and validation are added by R1.02.
-type Schema struct {
-	document *gqlast.Schema
-}
+type Schema struct{}
 
 // Intake parses doc after enforcing byte, lexical-token, and syntactic-depth
 // limits. It returns no partial Operation on rejection. Schema validation is
