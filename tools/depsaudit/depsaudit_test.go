@@ -19,11 +19,11 @@ func TestRuntimeDependencyPolicyIsExact(t *testing.T) {
 		{Module: "github.com/jackc/pgx/v5", EarliestGate: "R1", AllowedPackages: []string{"internal/datasource/postgres"}},
 		{Module: "github.com/lestrrat-go/jwx/v2", EarliestGate: "R3", AllowedPackages: []string{"internal/auth/oidc"}},
 		{Module: "github.com/nats-io/nats.go", EarliestGate: "R5", AllowedPackages: []string{"internal/bus/nats"}},
-		{Module: "github.com/prometheus/client_golang", EarliestGate: "R8", AllowedPackages: []string{"internal/observability"}},
+		{Module: "github.com/prometheus/client_golang", EarliestGate: "R8", AllowedPackages: []string{"internal/observability", "cmd/conduit"}},
 		{Module: "github.com/vektah/gqlparser/v2", EarliestGate: "R1", AllowedPackages: []string{"internal/graphql/ast"}},
-		{Module: "go.opentelemetry.io/otel", EarliestGate: "R8", AllowedPackages: []string{"internal/observability"}},
-		{Module: "go.opentelemetry.io/otel/exporters/prometheus", EarliestGate: "R8", AllowedPackages: []string{"internal/observability"}},
-		{Module: "go.opentelemetry.io/otel/sdk", EarliestGate: "R8", AllowedPackages: []string{"internal/observability"}},
+		{Module: "go.opentelemetry.io/otel", EarliestGate: "R8", AllowedPackages: []string{"internal/observability", "cmd/conduit"}},
+		{Module: "go.opentelemetry.io/otel/exporters/prometheus", EarliestGate: "R8", AllowedPackages: []string{"internal/observability", "cmd/conduit"}},
+		{Module: "go.opentelemetry.io/otel/sdk", EarliestGate: "R8", AllowedPackages: []string{"internal/observability", "cmd/conduit"}},
 		{Module: "gopkg.in/yaml.v3", EarliestGate: "R0", AllowedPackages: []string{"internal/config"}},
 	}
 	got := RuntimeAllowlist()
@@ -72,6 +72,22 @@ func TestAuditRejectsEveryDependencyPolicyViolation(t *testing.T) {
 	assertAuditFinding(t, got, "wrong-package", "github.com/coder/websocket", "example.com/depsinvalid/internal/fanout")
 	assertAuditFinding(t, got, "dependency-before-gate", "github.com/nats-io/nats.go", "")
 	assertAuditFinding(t, got, "missing-vendor", "github.com/nats-io/nats.go", "")
+}
+
+func TestAuditRejectsDirectRuntimeImportDespiteIndirectRequireMarker(t *testing.T) {
+	t.Parallel()
+
+	got, err := Audit(context.Background(), AuditOptions{
+		ModuleRoot:     filepath.Join("testdata", "indirect-label"),
+		GateStatusPath: filepath.Join("testdata", "indirect-label", "docs", "gate-status.json"),
+	})
+	if err != nil {
+		t.Fatalf("Audit(indirect-label): %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("Audit(indirect-label) findings = %d, want 1:\n%s", len(got), formatAuditFindings(got))
+	}
+	assertAuditFinding(t, got, "unapproved-direct-runtime", "example.com/rogue", "")
 }
 
 func TestRunFailsAndNamesDependencyPolicyReasons(t *testing.T) {
