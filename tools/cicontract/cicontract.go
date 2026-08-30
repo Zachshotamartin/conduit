@@ -176,16 +176,9 @@ var exactProtectedJobCommands = map[string]map[string][]string{
 }
 
 var platformCorrectnessCommands = []string{
-	"GO=go ./scripts/check-format.sh",
-	"./scripts/check-determinism.sh",
-	"go vet -mod=vendor ./...",
-	"go test -mod=vendor -race -shuffle=on ./...",
-	"go run -mod=vendor ./tools/archcheck",
-	"go run -mod=vendor ./tools/docsstatus ./docs",
-	"go run -mod=vendor ./tools/claimslint .",
-	"go run -mod=vendor ./tools/cicontract -root .",
-	"go run -mod=vendor ./tools/depsaudit -root .",
-	"go run -mod=vendor ./tools/tracecheck -root .",
+	"make bootstrap",
+	"make check",
+	"make test",
 }
 
 var exactJobRunCommands = map[string]map[string][]string{

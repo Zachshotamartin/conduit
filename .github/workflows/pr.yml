@@ -227,26 +227,12 @@ jobs:
           cache: false
       - name: Report runner platform
         run: go env GOOS GOARCH
-      - name: Check formatting
-        run: GO=go ./scripts/check-format.sh
-      - name: Check deterministic test sources
-        run: ./scripts/check-determinism.sh
-      - name: Vet all packages
-        run: go vet -mod=vendor ./...
-      - name: Run complete race suite
-        run: go test -mod=vendor -race -shuffle=on ./...
-      - name: Enforce architecture boundaries
-        run: go run -mod=vendor ./tools/archcheck
-      - name: Enforce documentation status vocabulary
-        run: go run -mod=vendor ./tools/docsstatus ./docs
-      - name: Enforce claims status
-        run: go run -mod=vendor ./tools/claimslint .
-      - name: Enforce CI contract
-        run: go run -mod=vendor ./tools/cicontract -root .
-      - name: Enforce dependency policy
-        run: go run -mod=vendor ./tools/depsaudit -root .
-      - name: Enforce requirement traceability
-        run: go run -mod=vendor ./tools/tracecheck -root .
+      - name: Bootstrap the exact contributor toolchain
+        run: make bootstrap
+      - name: Run the exact contributor check target
+        run: make check
+      - name: Run the exact contributor race suite
+        run: make test
   linux-arm64-correctness:
     name: linux-arm64-correctness
     runs-on: ubuntu-24.04-arm
@@ -262,23 +248,9 @@ jobs:
           cache: false
       - name: Report runner platform
         run: go env GOOS GOARCH
-      - name: Check formatting
-        run: GO=go ./scripts/check-format.sh
-      - name: Check deterministic test sources
-        run: ./scripts/check-determinism.sh
-      - name: Vet all packages
-        run: go vet -mod=vendor ./...
-      - name: Run complete race suite
-        run: go test -mod=vendor -race -shuffle=on ./...
-      - name: Enforce architecture boundaries
-        run: go run -mod=vendor ./tools/archcheck
-      - name: Enforce documentation status vocabulary
-        run: go run -mod=vendor ./tools/docsstatus ./docs
-      - name: Enforce claims status
-        run: go run -mod=vendor ./tools/claimslint .
-      - name: Enforce CI contract
-        run: go run -mod=vendor ./tools/cicontract -root .
-      - name: Enforce dependency policy
-        run: go run -mod=vendor ./tools/depsaudit -root .
-      - name: Enforce requirement traceability
-        run: go run -mod=vendor ./tools/tracecheck -root .
+      - name: Bootstrap the exact contributor toolchain
+        run: make bootstrap
+      - name: Run the exact contributor check target
+        run: make check
+      - name: Run the exact contributor race suite
+        run: make test

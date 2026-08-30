@@ -172,16 +172,9 @@ jobs:
           check-latest: false
           cache: false
       - run: go env GOOS GOARCH
-      - run: GO=go ./scripts/check-format.sh
-      - run: ./scripts/check-determinism.sh
-      - run: go vet -mod=vendor ./...
-      - run: go test -mod=vendor -race -shuffle=on ./...
-      - run: go run -mod=vendor ./tools/archcheck
-      - run: go run -mod=vendor ./tools/docsstatus ./docs
-      - run: go run -mod=vendor ./tools/claimslint .
-      - run: go run -mod=vendor ./tools/cicontract -root .
-      - run: go run -mod=vendor ./tools/depsaudit -root .
-      - run: go run -mod=vendor ./tools/tracecheck -root .
+      - run: make bootstrap
+      - run: make check
+      - run: make test
   linux-arm64-correctness:
     name: linux-arm64-correctness
     runs-on: ubuntu-24.04-arm
@@ -194,13 +187,6 @@ jobs:
           check-latest: false
           cache: false
       - run: go env GOOS GOARCH
-      - run: GO=go ./scripts/check-format.sh
-      - run: ./scripts/check-determinism.sh
-      - run: go vet -mod=vendor ./...
-      - run: go test -mod=vendor -race -shuffle=on ./...
-      - run: go run -mod=vendor ./tools/archcheck
-      - run: go run -mod=vendor ./tools/docsstatus ./docs
-      - run: go run -mod=vendor ./tools/claimslint .
-      - run: go run -mod=vendor ./tools/cicontract -root .
-      - run: go run -mod=vendor ./tools/depsaudit -root .
-      - run: go run -mod=vendor ./tools/tracecheck -root .
+      - run: make bootstrap
+      - run: make check
+      - run: make test
