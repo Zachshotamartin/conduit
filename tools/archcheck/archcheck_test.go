@@ -26,6 +26,9 @@ const (
 	reasonTestCode  = "internal packages must not import test packages"
 	reasonClock     = "domain packages must use injected clocks and seeded randomness"
 	reasonLoadgen   = "conduit-loadgen is a client and must not import registry, fanout, or queue"
+	reasonProtocol  = "internal/protocol must not import internal/datasource"
+	reasonBus       = "internal/queue and internal/registry must not import internal/bus"
+	reasonAdminSide = "internal/admin must not import internal/transport because the admin listener stack is separate"
 )
 
 type expectedViolation struct {
@@ -68,6 +71,10 @@ func TestCheckModuleReportsEveryArchitectureBoundary(t *testing.T) {
 		{rule: "ARCH-13", pkg: "cmd/conduit-loadgen", target: "internal/fanout", reason: reasonLoadgen},
 		{rule: "ARCH-13", pkg: "cmd/conduit-loadgen", target: "internal/queue", reason: reasonLoadgen},
 		{rule: "ARCH-13", pkg: "cmd/conduit-loadgen", target: "internal/registry", reason: reasonLoadgen},
+		{rule: "ARCH-14", pkg: "internal/protocol", target: "internal/datasource", reason: reasonProtocol},
+		{rule: "ARCH-15", pkg: "internal/queue", target: "internal/bus", reason: reasonBus},
+		{rule: "ARCH-15", pkg: "internal/registry", target: "internal/bus", reason: reasonBus},
+		{rule: "ARCH-16", pkg: "internal/admin", target: "internal/transport/client", reason: reasonAdminSide},
 	}
 
 	normalized := normalizeViolations(got)
@@ -78,6 +85,45 @@ func TestCheckModuleReportsEveryArchitectureBoundary(t *testing.T) {
 	for i := range want {
 		if normalized[i] != want[i] {
 			t.Errorf("violation[%d] = %#v, want %#v", i, normalized[i], want[i])
+		}
+	}
+}
+
+func TestEveryDeclaredArchitectureRuleHasFixtureCoverage(t *testing.T) {
+	t.Parallel()
+
+	violations, err := CheckModule(context.Background(), filepath.Join("testdata", "module"))
+	if err != nil {
+		t.Fatalf("CheckModule: %v", err)
+	}
+
+	rules := DefaultRules()
+	declared := make(map[string]Rule, len(rules))
+	for _, rule := range rules {
+		if rule.ID == "" || rule.Reason == "" {
+			t.Errorf("declared rule has an empty ID or reason: %#v", rule)
+		}
+		if _, duplicate := declared[rule.ID]; duplicate {
+			t.Errorf("architecture rule %q is declared more than once", rule.ID)
+		}
+		declared[rule.ID] = rule
+	}
+
+	covered := make(map[string]bool, len(rules))
+	for _, violation := range violations {
+		rule, ok := declared[violation.Rule]
+		if !ok {
+			t.Errorf("fixture produced undeclared architecture rule %q", violation.Rule)
+			continue
+		}
+		if violation.Reason != rule.Reason {
+			t.Errorf("fixture violation for %q uses reason %q, want declared reason %q", violation.Rule, violation.Reason, rule.Reason)
+		}
+		covered[violation.Rule] = true
+	}
+	for _, rule := range rules {
+		if !covered[rule.ID] {
+			t.Errorf("architecture rule %q has no active violation fixture", rule.ID)
 		}
 	}
 }
@@ -170,6 +216,22 @@ func TestRealRepositoryPasses(t *testing.T) {
 	var stderr bytes.Buffer
 	if code := Run(context.Background(), []string{"-root", root}, io.Discard, &stderr); code != 0 {
 		t.Fatalf("Run(real repository) exit code = %d, want 0; stderr:\n%s", code, stderr.String())
+	}
+}
+
+func TestCheckModuleUsesVendorWithAnEmptyOfflineModuleCache(t *testing.T) {
+	moduleCache := t.TempDir()
+	t.Setenv("GOMODCACHE", moduleCache)
+	t.Setenv("GOPROXY", "off")
+	t.Setenv("GOSUMDB", "off")
+
+	root := filepath.Join("testdata", "vendor-module")
+	got, err := CheckModule(context.Background(), root)
+	if err != nil {
+		t.Fatalf("CheckModule(%q) with an empty offline module cache: %v", root, err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("vendored offline fixture has architecture violations:\n%s", formatExpected(normalizeViolations(got)))
 	}
 }
 

@@ -129,6 +129,15 @@ func checkImport(modulePath string, pkg packageNode, imported string, collector 
 	if moduleImport && within(pkgRelative, "cmd/conduit-loadgen") && anyWithin(importRelative, "internal/registry", "internal/fanout", "internal/queue") {
 		collector.add("ARCH-13", pkg.ImportPath, imported)
 	}
+	if moduleImport && within(pkgRelative, "internal/protocol") && within(importRelative, "internal/datasource") {
+		collector.add("ARCH-14", pkg.ImportPath, imported)
+	}
+	if moduleImport && anyWithin(pkgRelative, "internal/queue", "internal/registry") && within(importRelative, "internal/bus") {
+		collector.add("ARCH-15", pkg.ImportPath, imported)
+	}
+	if moduleImport && within(pkgRelative, "internal/admin") && within(importRelative, "internal/transport") {
+		collector.add("ARCH-16", pkg.ImportPath, imported)
+	}
 }
 
 func checkSyntax(pkg packageNode, collector *violationCollector) {

@@ -1,8 +1,9 @@
 package main
 
 // Rule is the checked-in representation of one architecture boundary.
-// Package, MayImport, and MustNotImport are path patterns interpreted by the
-// checker; Reason is always included in a reported violation.
+// Package, MayImport, and MustNotImport describe the match semantics enforced
+// in check.go. The exhaustive violation fixture keeps every declared rule
+// coupled to live enforcement. Reason is always included in a violation.
 type Rule struct {
 	ID            string
 	Package       string
@@ -90,6 +91,24 @@ var architectureRules = []Rule{
 		MayImport:     []string{"wire codecs", "internal/bus/memory"},
 		MustNotImport: []string{"internal/registry/**", "internal/fanout/**", "internal/queue/**"},
 		Reason:        "conduit-loadgen is a client and must not import registry, fanout, or queue",
+	},
+	{
+		ID:            "ARCH-14",
+		Package:       "internal/protocol",
+		MustNotImport: []string{"internal/datasource/**"},
+		Reason:        "internal/protocol must not import internal/datasource",
+	},
+	{
+		ID:            "ARCH-15",
+		Package:       "internal/{queue,registry}",
+		MustNotImport: []string{"internal/bus/**"},
+		Reason:        "internal/queue and internal/registry must not import internal/bus",
+	},
+	{
+		ID:            "ARCH-16",
+		Package:       "internal/admin",
+		MustNotImport: []string{"internal/transport/**"},
+		Reason:        "internal/admin must not import internal/transport because the admin listener stack is separate",
 	},
 }
 

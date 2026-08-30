@@ -85,7 +85,11 @@ func loadModuleGraph(ctx context.Context, root string) (moduleGraph, error) {
 		module.Dir = absRoot
 	}
 
-	packageJSON, stderr, err := runGo(ctx, absRoot, "list", "-mod=readonly", "-deps", "-json", "./...")
+	moduleMode, err := packageGraphModuleMode(absRoot)
+	if err != nil {
+		return moduleGraph{}, err
+	}
+	packageJSON, stderr, err := runGo(ctx, absRoot, "list", "-mod="+moduleMode, "-deps", "-json", "./...")
 	if err != nil {
 		return moduleGraph{}, fmt.Errorf("load package graph: %w%s", err, commandStderr(stderr))
 	}
@@ -125,6 +129,21 @@ func loadModuleGraph(ctx context.Context, root string) (moduleGraph, error) {
 		return graph.Packages[i].ImportPath < graph.Packages[j].ImportPath
 	})
 	return graph, nil
+}
+
+func packageGraphModuleMode(root string) (string, error) {
+	manifest := filepath.Join(root, "vendor", "modules.txt")
+	info, err := os.Stat(manifest)
+	if err == nil {
+		if !info.Mode().IsRegular() {
+			return "", fmt.Errorf("vendor manifest %q is not a regular file", manifest)
+		}
+		return "vendor", nil
+	}
+	if !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat vendor manifest %q: %w", manifest, err)
+	}
+	return "readonly", nil
 }
 
 func runGo(ctx context.Context, dir string, args ...string) ([]byte, []byte, error) {
