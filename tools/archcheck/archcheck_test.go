@@ -29,6 +29,7 @@ const (
 	reasonProtocol  = "internal/protocol must not import internal/datasource"
 	reasonBus       = "internal/queue and internal/registry must not import internal/bus"
 	reasonAdminSide = "internal/admin must not import internal/transport because the admin listener stack is separate"
+	reasonRedaction = "every declared sink owner must directly import internal/observability/redaction"
 )
 
 type expectedViolation struct {
@@ -96,6 +97,17 @@ func TestEveryDeclaredArchitectureRuleHasFixtureCoverage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CheckModule: %v", err)
 	}
+	redactionRules := DefaultRules()
+	for index := range redactionRules {
+		if redactionRules[index].ID == "ARCH-17" {
+			redactionRules[index] = redactionRule([]string{"internal/sink"})
+		}
+	}
+	redactionViolations, err := checkModuleWithRules(context.Background(), filepath.Join("testdata", "module"), redactionRules)
+	if err != nil {
+		t.Fatalf("checkModuleWithRules(redaction hostile fixture): %v", err)
+	}
+	violations = append(violations, redactionViolations...)
 
 	rules := DefaultRules()
 	declared := make(map[string]Rule, len(rules))
@@ -125,6 +137,221 @@ func TestEveryDeclaredArchitectureRuleHasFixtureCoverage(t *testing.T) {
 		if !covered[rule.ID] {
 			t.Errorf("architecture rule %q has no active violation fixture", rule.ID)
 		}
+	}
+}
+
+func TestRuleConfigurationDrivesEnforcement(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join("testdata", "module")
+	tests := []struct {
+		name       string
+		rule       Rule
+		wantTarget string
+	}{
+		{
+			name:       "MayImport confines a target",
+			rule:       Rule{ID: "TEST-MAY", Package: "internal/transport/**", MayImport: []string{"github.com/coder/websocket/**"}, Reason: "test"},
+			wantTarget: "github.com/coder/websocket",
+		},
+		{
+			name:       "MustNotImport denies a target",
+			rule:       Rule{ID: "TEST-DENY", Package: "internal/fanout", MustNotImport: []string{"github.com/coder/websocket/**"}, Reason: "test"},
+			wantTarget: "github.com/coder/websocket",
+		},
+		{
+			name:       "MustImport requires a direct edge",
+			rule:       Rule{ID: "TEST-REQUIRE", Package: "internal/sink", MustImport: []string{"internal/observability/redaction"}, Reason: "test"},
+			wantTarget: "internal/observability/redaction",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := checkModuleWithRules(context.Background(), root, []Rule{test.rule})
+			if err != nil {
+				t.Fatalf("checkModuleWithRules: %v", err)
+			}
+			if len(got) != 1 || !strings.HasSuffix(got[0].Target, test.wantTarget) {
+				t.Fatalf("violations = %#v, want one target ending in %q", got, test.wantTarget)
+			}
+		})
+	}
+
+	allowed := Rule{ID: "TEST-ALLOW", Package: "internal/sinkcompliant", MustImport: []string{"internal/observability/redaction"}, Reason: "test"}
+	got, err := checkModuleWithRules(context.Background(), root, []Rule{allowed})
+	if err != nil {
+		t.Fatalf("checkModuleWithRules(compliant owner): %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("compliant owner produced violations: %#v", got)
+	}
+}
+
+func TestSinkOwnerInventoryIsExactAndFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	inventory, err := parseSinkOwnerInventory(sinkOwnerInventoryJSON)
+	if err != nil {
+		t.Fatalf("checked-in inventory: %v", err)
+	}
+	if len(inventory.Owners) != 0 {
+		t.Fatalf("R0 sink-owner inventory = %v, want honestly empty", inventory.Owners)
+	}
+	wantCandidates := []string{"internal/admin", "internal/graphql/executor", "internal/observability"}
+	if strings.Join(inventory.Candidates, ",") != strings.Join(wantCandidates, ",") {
+		t.Fatalf("sink-owner candidates = %v, want normative set %v", inventory.Candidates, wantCandidates)
+	}
+
+	invalid := map[string]string{
+		"malformed":           `{`,
+		"wrong schema":        `{"schema_version":2,"candidates":["internal/a"],"owners":[]}`,
+		"missing candidates":  `{"schema_version":1,"owners":[]}`,
+		"null candidates":     `{"schema_version":1,"candidates":null,"owners":[]}`,
+		"empty candidates":    `{"schema_version":1,"candidates":[],"owners":[]}`,
+		"missing owners":      `{"schema_version":1,"candidates":["internal/a"]}`,
+		"null owners":         `{"schema_version":1,"candidates":["internal/a"],"owners":null}`,
+		"unknown field":       `{"schema_version":1,"candidates":["internal/a"],"owners":[],"extra":true}`,
+		"duplicate candidate": `{"schema_version":1,"candidates":["internal/a","internal/a"],"owners":[]}`,
+		"unsorted candidates": `{"schema_version":1,"candidates":["internal/z","internal/a"],"owners":[]}`,
+		"wildcard candidate":  `{"schema_version":1,"candidates":["internal/a/*"],"owners":[]}`,
+		"external candidate":  `{"schema_version":1,"candidates":["cmd/conduit"],"owners":[]}`,
+		"duplicate owner":     `{"schema_version":1,"candidates":["internal/a"],"owners":["internal/a","internal/a"]}`,
+		"owner not candidate": `{"schema_version":1,"candidates":["internal/a"],"owners":["internal/b"]}`,
+		"trailing value":      `{"schema_version":1,"candidates":["internal/a"],"owners":[]} {}`,
+	}
+	for name, document := range invalid {
+		name, document := name, document
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := parseSinkOwnerInventory([]byte(document)); err == nil {
+				t.Fatalf("parseSinkOwnerInventory(%s) succeeded, want failure", document)
+			}
+		})
+	}
+}
+
+func TestSinkOwnerCandidateCompleteness(t *testing.T) {
+	t.Parallel()
+
+	root := filepath.Join("testdata", "module")
+	tests := []struct {
+		name      string
+		inventory sinkOwnerInventory
+		wantError string
+		wantRule  string
+	}{
+		{
+			name:      "active candidate omitted",
+			inventory: sinkOwnerInventory{SchemaVersion: 1, Candidates: []string{"internal/sink"}, Owners: []string{}},
+			wantError: "active candidate \"internal/sink\" is omitted from owners",
+		},
+		{
+			name:      "unknown candidate",
+			inventory: sinkOwnerInventory{SchemaVersion: 1, Candidates: []string{"internal/missing-sink"}, Owners: []string{}},
+			wantError: "candidate \"internal/missing-sink\" does not exist",
+		},
+		{
+			name:      "inactive owner is stale",
+			inventory: sinkOwnerInventory{SchemaVersion: 1, Candidates: []string{"internal/admin"}, Owners: []string{"internal/admin"}},
+			wantError: "owner \"internal/admin\" is doc.go-only",
+		},
+		{
+			name:      "active owner missing redaction",
+			inventory: sinkOwnerInventory{SchemaVersion: 1, Candidates: []string{"internal/sink"}, Owners: []string{"internal/sink"}},
+			wantRule:  "ARCH-17",
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			rules := []Rule{redactionRule(test.inventory.Owners)}
+			got, err := checkModuleWithPolicy(context.Background(), root, rules, &test.inventory)
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("error = %v, want substring %q", err, test.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("checkModuleWithPolicy: %v", err)
+			}
+			if len(got) != 1 || got[0].Rule != test.wantRule {
+				t.Fatalf("violations = %#v, want one %s violation", got, test.wantRule)
+			}
+		})
+	}
+
+	inactive := sinkOwnerInventory{SchemaVersion: 1, Candidates: []string{"internal/admin"}, Owners: []string{}}
+	got, err := checkModuleWithPolicy(context.Background(), root, []Rule{redactionRule(nil)}, &inactive)
+	if err != nil {
+		t.Fatalf("doc.go-only candidate: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("doc.go-only candidate produced violations: %#v", got)
+	}
+
+	compliant := sinkOwnerInventory{SchemaVersion: 1, Candidates: []string{"internal/sinkcompliant"}, Owners: []string{"internal/sinkcompliant"}}
+	got, err = checkModuleWithPolicy(context.Background(), root, []Rule{redactionRule(compliant.Owners)}, &compliant)
+	if err != nil {
+		t.Fatalf("compliant active owner: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("compliant active owner produced violations: %#v", got)
+	}
+}
+
+func TestMissingSinkOwnerPackageFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	_, err := checkModuleWithRules(
+		context.Background(),
+		filepath.Join("testdata", "module"),
+		[]Rule{redactionRule([]string{"internal/missing-sink"})},
+	)
+	if err == nil || !strings.Contains(err.Error(), "does not exist in the module graph") {
+		t.Fatalf("missing owner error = %v, want fail-closed inventory error", err)
+	}
+}
+
+func TestMalformedRuleConfigurationFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	valid := Rule{ID: "TEST", Package: "internal/sink", MustNotImport: []string{"internal/queue"}, Reason: "test"}
+	tests := []struct {
+		name  string
+		rules []Rule
+	}{
+		{name: "duplicate ID", rules: []Rule{valid, valid}},
+		{name: "malformed selector", rules: []Rule{{ID: "TEST", Package: "internal/{sink", MustNotImport: []string{"internal/queue"}, Reason: "test"}}},
+		{name: "negative-only selector", rules: []Rule{{ID: "TEST", Package: "!internal/sink", MustNotImport: []string{"internal/queue"}, Reason: "test"}}},
+		{name: "no targets", rules: []Rule{{ID: "TEST", Package: "internal/sink", Reason: "test"}}},
+		{name: "wildcard required owner", rules: []Rule{{ID: "TEST", Package: "internal/sink/**", MustImport: []string{"internal/observability/redaction"}, Reason: "test"}}},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := checkModuleWithRules(context.Background(), filepath.Join("testdata", "module"), test.rules); err == nil {
+				t.Fatalf("checkModuleWithRules accepted malformed rules: %#v", test.rules)
+			}
+		})
+	}
+}
+
+func TestTestOnlyImportDoesNotSatisfySinkOwnerRule(t *testing.T) {
+	t.Parallel()
+
+	inventory := sinkOwnerInventory{SchemaVersion: 1, Candidates: []string{"internal/sinktestonly"}, Owners: []string{"internal/sinktestonly"}}
+	rule := redactionRule(inventory.Owners)
+	got, err := checkModuleWithPolicy(context.Background(), filepath.Join("testdata", "module"), []Rule{rule}, &inventory)
+	if err != nil {
+		t.Fatalf("checkModuleWithRules: %v", err)
+	}
+	if len(got) != 1 || got[0].Rule != "ARCH-17" || got[0].Reason != reasonRedaction {
+		t.Fatalf("test-only redaction import violations = %#v, want one ARCH-17 violation", got)
 	}
 }
 
@@ -203,7 +430,7 @@ func TestCheckModuleAllowsEveryDocumentedException(t *testing.T) {
 	}
 }
 
-func TestRealRepositoryPasses(t *testing.T) {
+func TestUNIT019_RealRepositoryPasses(t *testing.T) {
 	root := filepath.Clean(filepath.Join("..", ".."))
 	got, err := CheckModule(context.Background(), root)
 	if err != nil {

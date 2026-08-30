@@ -45,11 +45,13 @@ type listedPackage struct {
 }
 
 type packageNode struct {
-	ImportPath string
-	Relative   string
-	Dir        string
-	Imports    []string
-	Files      []*ast.File
+	ImportPath        string
+	Relative          string
+	Dir               string
+	Imports           []string
+	ProductionImports []string
+	ProductionFiles   []string
+	Files             []*ast.File
 }
 
 type moduleGraph struct {
@@ -181,17 +183,28 @@ func buildPackageNode(listed listedPackage, modulePath string) (packageNode, err
 	}
 
 	imports := make(map[string]struct{})
+	productionImports := make(map[string]struct{})
+	for _, imported := range listed.Imports {
+		productionImports[imported] = struct{}{}
+	}
 	for _, imported := range appendSlices(listed.Imports, listed.TestImports, listed.XTestImports) {
 		imports[imported] = struct{}{}
 	}
 
-	fileNames := appendSlices(
+	productionFileNames := appendSlices(
 		listed.GoFiles,
 		listed.CgoFiles,
 		listed.IgnoredGoFiles,
+	)
+	fileNames := appendSlices(
+		productionFileNames,
 		listed.TestGoFiles,
 		listed.XTestGoFiles,
 	)
+	productionFiles := make(map[string]struct{}, len(productionFileNames))
+	for _, name := range productionFileNames {
+		productionFiles[name] = struct{}{}
+	}
 	seenFiles := make(map[string]struct{}, len(fileNames))
 	files := make([]*ast.File, 0, len(fileNames))
 	fileSet := token.NewFileSet()
@@ -218,6 +231,9 @@ func buildPackageNode(listed listedPackage, modulePath string) (packageNode, err
 			}
 			if imported != "C" {
 				imports[imported] = struct{}{}
+				if _, production := productionFiles[name]; production {
+					productionImports[imported] = struct{}{}
+				}
 			}
 		}
 	}
@@ -227,6 +243,13 @@ func buildPackageNode(listed listedPackage, modulePath string) (packageNode, err
 		node.Imports = append(node.Imports, imported)
 	}
 	sort.Strings(node.Imports)
+	node.ProductionImports = make([]string, 0, len(productionImports))
+	for imported := range productionImports {
+		node.ProductionImports = append(node.ProductionImports, imported)
+	}
+	sort.Strings(node.ProductionImports)
+	node.ProductionFiles = append([]string(nil), productionFileNames...)
+	sort.Strings(node.ProductionFiles)
 	node.Files = files
 	return node, nil
 }
