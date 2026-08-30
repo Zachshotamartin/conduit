@@ -84,7 +84,6 @@ func preflight(input string, limits IntakeLimits) error {
 	scanner := lexer.New(&source)
 	tokenCount := 0
 	depth := 0
-	maxDepth := 0
 
 	for {
 		token, err := scanner.ReadToken()
@@ -94,9 +93,6 @@ func preflight(input string, limits IntakeLimits) error {
 		if token.Kind == lexer.EOF {
 			if tokenCount == 0 {
 				return invalidRequest(errEmpty)
-			}
-			if maxDepth > limits.MaxDepth {
-				return invalidRequest(errDepthLimit)
 			}
 			return nil
 		}
@@ -112,8 +108,8 @@ func preflight(input string, limits IntakeLimits) error {
 		switch token.Kind {
 		case lexer.BraceL, lexer.BracketL, lexer.ParenL:
 			depth++
-			if depth > maxDepth {
-				maxDepth = depth
+			if depth > limits.MaxDepth {
+				return invalidRequest(errDepthLimit)
 			}
 		case lexer.BraceR, lexer.BracketR, lexer.ParenR:
 			if depth > 0 {
