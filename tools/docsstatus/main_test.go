@@ -79,7 +79,7 @@ func TestLintDocsAllowsMetaLanguageAndOpenQuestions(t *testing.T) {
 	}
 }
 
-func TestCurrentDocumentationPasses(t *testing.T) {
+func TestUNIT020_CurrentDocumentationPasses(t *testing.T) {
 	violations, err := lintDocs(filepath.Join("..", "..", "docs"))
 	if err != nil {
 		t.Fatalf("lint docs: %v", err)

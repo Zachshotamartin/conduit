@@ -74,7 +74,7 @@ func TestAdvanceMovesTimeOnlyWhenExplicitlyRequested(t *testing.T) {
 	}
 }
 
-func TestScheduledCallbacksReceiveDeadlinesInDeterministicOrder(t *testing.T) {
+func TestUNIT022_ScheduledCallbacksReceiveDeadlinesInDeterministicOrder(t *testing.T) {
 	t.Parallel()
 
 	start := time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC)

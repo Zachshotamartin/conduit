@@ -59,7 +59,7 @@ func TestRunReportsViolationsAndUsageErrors(t *testing.T) {
 	}
 }
 
-func TestCurrentRepositoryTestsAreDeterministic(t *testing.T) {
+func TestUNIT022_CurrentRepositoryTestsAreDeterministic(t *testing.T) {
 	violations, err := Check(filepath.Clean(filepath.Join("..", "..")))
 	if err != nil {
 		t.Fatalf("Check(repository): %v", err)
