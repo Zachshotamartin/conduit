@@ -1,0 +1,8 @@
+# example.com/testhelper v0.0.0 => ./stubs/example.com/testhelper
+## explicit; go 1.23.0
+example.com/testhelper
+# github.com/coder/websocket v0.0.0 => ./stubs/github.com/coder/websocket
+## explicit; go 1.23.0
+github.com/coder/websocket
+# example.com/testhelper => ./stubs/example.com/testhelper
+# github.com/coder/websocket => ./stubs/github.com/coder/websocket

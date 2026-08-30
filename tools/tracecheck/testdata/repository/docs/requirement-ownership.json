@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "requirements": [
+    {"id": "FR-OPS-002", "terminal_gate": "R10"},
+    {"id": "NFR-MAINT-005", "terminal_gate": "R0"}
+  ]
+}
