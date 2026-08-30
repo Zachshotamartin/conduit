@@ -131,10 +131,25 @@ func TestCheckRejectsOwnershipMirrorErrors(t *testing.T) {
 	}
 }
 
-func TestCheckRequiresTestFunctionsWhenEarliestGateStarts(t *testing.T) {
+func TestCheckAllowsTicketOrderedTestFunctionsWhileGateIsInProgress(t *testing.T) {
 	t.Parallel()
 
 	options := validOptions()
+	options.TestRoots = []string{filepath.Join(fixtureRoot(), "tests", "missing")}
+	got, err := Check(context.Background(), options)
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	assertNoTraceViolation(t, got, "missing-test-row", "UNIT-001")
+	assertNoTraceViolation(t, got, "missing-test-row", "UNIT-016")
+	assertNoTraceViolation(t, got, "missing-test-row", "UNIT-002")
+}
+
+func TestCheckRequiresTestFunctionsWhenEarliestGateIsAccepted(t *testing.T) {
+	t.Parallel()
+
+	options := validOptions()
+	options.GateStatusPath = filepath.Join(fixtureRoot(), "status", "r0-accepted.json")
 	options.TestRoots = []string{filepath.Join(fixtureRoot(), "tests", "missing")}
 	got, err := Check(context.Background(), options)
 	if err != nil {
@@ -164,17 +179,15 @@ func TestRunNamesViolationsAndReturnsFailure(t *testing.T) {
 	var stderr bytes.Buffer
 	code := Run(
 		context.Background(),
-		[]string{"-root", filepath.Join("testdata", "repository"), "-tests", filepath.Join("testdata", "repository", "tests", "missing")},
+		[]string{"-root", filepath.Join("testdata", "repository"), "-tests", filepath.Join("testdata", "repository", "tests", "invented")},
 		io.Discard,
 		&stderr,
 	)
 	if code != 1 {
 		t.Fatalf("Run exit code = %d, want 1; stderr:\n%s", code, stderr.String())
 	}
-	for _, row := range []string{"UNIT-001", "UNIT-016"} {
-		if !strings.Contains(stderr.String(), row) {
-			t.Errorf("stderr does not name %s:\n%s", row, stderr.String())
-		}
+	if !strings.Contains(stderr.String(), "FR-FAKE-999") {
+		t.Errorf("stderr does not name invented requirement:\n%s", stderr.String())
 	}
 }
 
