@@ -239,6 +239,27 @@ func TestUNIT003_DepthPreflightCoversRecursiveValueAndTypeGrammar(t *testing.T) 
 	}
 }
 
+func TestUNIT003_DepthLimitAbortsBeforeTrailingLexicalFailure(t *testing.T) {
+	t.Parallel()
+
+	document := []byte{'{', 'a', '{', 'a', 0}
+	operation, err := graphqlast.Intake(
+		document,
+		graphqlast.IntakeLimits{MaxDepth: 1},
+		nil,
+	)
+	assertTypedErrorAndNilOperation(t, operation, err)
+
+	cause := stderrors.Unwrap(err)
+	if cause == nil {
+		t.Fatal("Intake() typed rejection has no diagnostic cause")
+	}
+	const want = "GraphQL document parse-depth limit exceeded"
+	if got := cause.Error(); got != want {
+		t.Fatalf("Intake() cause = %q, want immediate depth rejection %q", got, want)
+	}
+}
+
 func TestUNIT003_IntakeParsesDeterministicFixture(t *testing.T) {
 	t.Parallel()
 
