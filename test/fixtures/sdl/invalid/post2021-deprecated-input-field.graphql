@@ -1,0 +1,2 @@
+input Filter { value: String @deprecated }
+type Query { value(filter: Filter): String }

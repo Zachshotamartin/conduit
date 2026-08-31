@@ -1,0 +1,2 @@
+interface Node { id: ID! }
+type Query implements Node & Node { id: ID! }

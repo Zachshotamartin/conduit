@@ -4,7 +4,8 @@
     "valid/all-directives.graphql",
     "valid/complexity-singleton-multiplier.graphql",
     "valid/backpressure-inherit.graphql",
-    "valid/filterable-builtins.graphql"
+    "valid/filterable-builtins.graphql",
+    "valid/custom-future-named-directives.graphql"
   ],
   "invalid": [
     {"file":"invalid/syntax.graphql","rule":"graphql.sdl.syntax"},
@@ -50,6 +51,31 @@
     {"file":"invalid/complexity-multiplier-empty.graphql","rule":"conduit.complexity.multiplier_nonempty"},
     {"file":"invalid/complexity-multiplier-duplicate.graphql","rule":"conduit.complexity.multiplier_unique"},
     {"file":"invalid/complexity-multiplier-unknown.graphql","rule":"conduit.complexity.multiplier_argument"},
-    {"file":"invalid/complexity-multiplier-non-int.graphql","rule":"conduit.complexity.multiplier_type"}
+    {"file":"invalid/complexity-multiplier-non-int.graphql","rule":"conduit.complexity.multiplier_type"},
+    {"file":"invalid/root-missing.graphql","rule":"graphql.sdl.root_known_type"},
+    {"file":"invalid/root-non-object.graphql","rule":"graphql.sdl.root_object"},
+    {"file":"invalid/root-not-distinct.graphql","rule":"graphql.sdl.root_distinct"},
+    {"file":"invalid/required-input-cycle.graphql","rule":"graphql.sdl.input_cycle"},
+    {"file":"invalid/duplicate-implemented-interface.graphql","rule":"graphql.sdl.unique_interface"},
+    {"file":"invalid/directive-definition-duplicate-argument.graphql","rule":"graphql.directive.unique_argument_definition"},
+    {"file":"invalid/directive-use-duplicate-argument.graphql","rule":"graphql.directive.unique_argument"},
+    {"file":"invalid/argument-default-wrong-type.graphql","rule":"graphql.sdl.argument_default"},
+    {"file":"invalid/input-default-wrong-type.graphql","rule":"graphql.sdl.input_field_default"},
+    {"file":"invalid/directive-default-wrong-type.graphql","rule":"graphql.directive.default_value"},
+    {"file":"invalid/directive-input-unknown-field.graphql","rule":"graphql.directive.input_field_known"},
+    {"file":"invalid/directive-input-duplicate-field.graphql","rule":"graphql.directive.input_field_unique"},
+    {"file":"invalid/directive-input-missing-field.graphql","rule":"graphql.directive.input_field_required"},
+    {"file":"invalid/directive-input-wrong-field-type.graphql","rule":"graphql.directive.input_field_type"},
+    {"file":"invalid/nonrepeatable-directive-extension.graphql","rule":"graphql.directive.unique_per_location"},
+    {"file":"invalid/reserved-enum-value.graphql","rule":"graphql.sdl.reserved_name"},
+    {"file":"invalid/post2021-defer.graphql","rule":"conduit.spec_version.october_2021"},
+    {"file":"invalid/post2021-stream.graphql","rule":"conduit.spec_version.october_2021"},
+    {"file":"invalid/post2021-deprecated-argument.graphql","rule":"conduit.spec_version.october_2021"},
+    {"file":"invalid/post2021-deprecated-input-field.graphql","rule":"conduit.spec_version.october_2021"},
+    {"file":"invalid/conduit-duplicate-use.graphql","rule":"graphql.directive.unique_per_location"},
+    {"file":"invalid/conduit-duplicate-argument.graphql","rule":"graphql.directive.unique_argument"},
+    {"file":"invalid/conduit-unknown-argument.graphql","rule":"graphql.directive.known_argument"},
+    {"file":"invalid/source-subscription-union.graphql","rule":"conduit.source.subscription_io"},
+    {"file":"invalid/source-subscription-interface.graphql","rule":"conduit.source.subscription_io"}
   ]
 }

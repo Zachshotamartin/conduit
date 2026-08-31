@@ -1,0 +1,2 @@
+schema { query: Missing }
+type Query { ok: Boolean }

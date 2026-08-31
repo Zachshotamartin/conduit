@@ -93,6 +93,18 @@ func TestUNIT002_SchemaLoaderRejectsUnsafeOrDuplicateLogicalNames(t *testing.T) 
 				{Name: "schemas/main.graphql", Input: []byte("type Other { ok: Boolean }")},
 			},
 		},
+		{
+			name: "control character",
+			sources: []graphqlast.SchemaSource{
+				{Name: "schema\nforged.graphql", Input: []byte("type Query { ok: Boolean }")},
+			},
+		},
+		{
+			name: "invalid UTF-8",
+			sources: []graphqlast.SchemaSource{
+				{Name: string([]byte{'s', 0xff}), Input: []byte("type Query { ok: Boolean }")},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -103,6 +115,33 @@ func TestUNIT002_SchemaLoaderRejectsUnsafeOrDuplicateLogicalNames(t *testing.T) 
 			assertSchemaDiagnostics(t, loaded, err, "sdl.file.logical_name", "")
 		})
 	}
+}
+
+func TestUNIT002_SchemaLoaderEnforcesExactTokenAndDepthBounds(t *testing.T) {
+	t.Parallel()
+	const flat = "type Query { ok: Boolean }"
+	loaded, err := graphqlast.LoadSchema([]graphqlast.SchemaSource{{
+		Name: "flat.graphql", Input: []byte(flat),
+	}}, graphqlast.SchemaLimits{MaxTokens: 7, MaxNestingDepth: 1})
+	if err != nil || loaded == nil {
+		t.Fatalf("LoadSchema(at token/depth bounds) = (%v, %v), want schema", loaded, err)
+	}
+	loaded, err = graphqlast.LoadSchema([]graphqlast.SchemaSource{{
+		Name: "flat.graphql", Input: []byte(flat),
+	}}, graphqlast.SchemaLimits{MaxTokens: 6})
+	assertSchemaDiagnostics(t, loaded, err, "sdl.limit.tokens", "flat.graphql")
+
+	const nested = "type Query { value(input: Int): Int }"
+	loaded, err = graphqlast.LoadSchema([]graphqlast.SchemaSource{{
+		Name: "nested.graphql", Input: []byte(nested),
+	}}, graphqlast.SchemaLimits{MaxNestingDepth: 2})
+	if err != nil || loaded == nil {
+		t.Fatalf("LoadSchema(at nesting bound) = (%v, %v), want schema", loaded, err)
+	}
+	loaded, err = graphqlast.LoadSchema([]graphqlast.SchemaSource{{
+		Name: "nested.graphql", Input: []byte(nested),
+	}}, graphqlast.SchemaLimits{MaxNestingDepth: 1})
+	assertSchemaDiagnostics(t, loaded, err, "sdl.limit.depth", "nested.graphql")
 }
 
 func TestUNIT002_SchemaSnapshotIsVendorFreeAndDefensive(t *testing.T) {
@@ -130,6 +169,39 @@ func TestUNIT002_SchemaSnapshotIsVendorFreeAndDefensive(t *testing.T) {
 	snapshot.Types[0].Name = "mutated"
 	if got := loaded.Snapshot().Types[0].Name; got != original {
 		t.Fatalf("Snapshot mutation changed serving schema: got %q, want %q", got, original)
+	}
+}
+
+func TestUNIT002_SchemaValidatesOperationsAndRetainsAnchor(t *testing.T) {
+	t.Parallel()
+	schema, err := graphqlast.LoadSchema([]graphqlast.SchemaSource{{
+		Name: "schema.graphql", Input: []byte("type Query { ok: Boolean! }"),
+	}}, graphqlast.SchemaLimits{})
+	if err != nil {
+		t.Fatalf("LoadSchema() error = %v", err)
+	}
+	if schema.Anchor() == (graphqlast.SchemaAnchor{}) {
+		t.Fatal("Schema.Anchor() returned the forgeable zero anchor")
+	}
+
+	operation, err := graphqlast.Intake([]byte("{ ok }"), graphqlast.IntakeLimits{}, schema)
+	if err != nil {
+		t.Fatalf("Intake(known field) error = %v", err)
+	}
+	if operation.Anchor() != schema.Anchor() {
+		t.Fatal("admitted operation does not retain its validating schema anchor")
+	}
+
+	operation, err = graphqlast.Intake([]byte("{ missing }"), graphqlast.IntakeLimits{}, schema)
+	if operation != nil {
+		t.Fatal("Intake(unknown field) returned a partial operation")
+	}
+	if err == nil {
+		t.Fatal("Intake(unknown field) error = nil")
+	}
+	var classified *conduiterrors.Error
+	if !stderrors.As(err, &classified) || classified.Category() != conduiterrors.InvalidRequest {
+		t.Fatalf("Intake(unknown field) error = %v, want invalid_request", err)
 	}
 }
 
