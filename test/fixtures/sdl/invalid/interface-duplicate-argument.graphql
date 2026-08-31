@@ -1,0 +1,2 @@
+interface Finder { find(id: ID, id: ID): String }
+type Query { finder: Finder }

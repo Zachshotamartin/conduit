@@ -6,7 +6,10 @@
     "valid/backpressure-inherit.graphql",
     "valid/filterable-builtins.graphql",
     "valid/custom-future-named-directives.graphql",
-    "valid/interface-extension-implements.graphql"
+    "valid/interface-extension-implements.graphql",
+    "valid/interface-covariance.graphql",
+    "valid/input-cycles-with-breaks.graphql",
+    "valid/all-type-system-directive-locations.graphql"
   ],
   "invalid": [
     {"file":"invalid/syntax.graphql","rule":"graphql.sdl.syntax"},
@@ -137,6 +140,26 @@
     {"file":"invalid/union-extension-existing-member.graphql","rule":"graphql.sdl.unique_union_member"},
     {"file":"invalid/union-extension-non-object.graphql","rule":"graphql.sdl.union_member_object"},
     {"file":"invalid/union-member-non-object.graphql","rule":"graphql.sdl.union_member_object"},
-    {"file":"invalid/union-member-unknown.graphql","rule":"graphql.sdl.known_type"}
+    {"file":"invalid/union-member-unknown.graphql","rule":"graphql.sdl.known_type"},
+    {"file":"invalid/reserved-directive-argument-name.graphql","rule":"graphql.sdl.reserved_name"},
+    {"file":"invalid/directive-argument-unknown-type.graphql","rule":"graphql.sdl.known_type"},
+    {"file":"invalid/interface-duplicate-field.graphql","rule":"graphql.sdl.unique_field"},
+    {"file":"invalid/interface-duplicate-argument.graphql","rule":"graphql.sdl.unique_argument"},
+    {"file":"invalid/argument-default-nonnull-null.graphql","rule":"graphql.sdl.argument_default"},
+    {"file":"invalid/argument-default-enum.graphql","rule":"graphql.sdl.argument_default"},
+    {"file":"invalid/argument-default-list-item.graphql","rule":"graphql.sdl.argument_default"},
+    {"file":"invalid/argument-default-nested.graphql","rule":"graphql.sdl.argument_default"},
+    {"file":"invalid/argument-default-int-overflow.graphql","rule":"graphql.sdl.argument_default"},
+    {"file":"invalid/input-default-nonnull-null.graphql","rule":"graphql.sdl.input_field_default"},
+    {"file":"invalid/input-default-list-item.graphql","rule":"graphql.sdl.input_field_default"},
+    {"file":"invalid/directive-default-nonnull-null.graphql","rule":"graphql.directive.default_value"},
+    {"file":"invalid/directive-default-int-overflow.graphql","rule":"graphql.directive.default_value"},
+    {"file":"invalid/directive-use-required-null.graphql","rule":"graphql.directive.argument_type"},
+    {"file":"invalid/directive-use-enum.graphql","rule":"graphql.directive.argument_type"},
+    {"file":"invalid/directive-use-list-item.graphql","rule":"graphql.directive.argument_type"},
+    {"file":"invalid/directive-use-int-overflow.graphql","rule":"graphql.directive.argument_type"},
+    {"file":"invalid/directive-use-nested-list-item.graphql","rule":"graphql.directive.input_field_type"},
+    {"file":"invalid/enum-invalid-false.graphql","rule":"graphql.sdl.enum_value_name"},
+    {"file":"invalid/enum-invalid-null.graphql","rule":"graphql.sdl.enum_value_name"}
   ]
 }

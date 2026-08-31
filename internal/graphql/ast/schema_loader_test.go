@@ -205,6 +205,45 @@ func TestUNIT002_SchemaValidatesOperationsAndRetainsAnchor(t *testing.T) {
 	}
 }
 
+func TestUNIT002_IntrospectionSurfaceIsFrozenAtOctober2021(t *testing.T) {
+	t.Parallel()
+	schema, err := graphqlast.LoadSchema([]graphqlast.SchemaSource{{
+		Name: "schema.graphql",
+		Input: []byte(`
+			type Query { ok: Boolean! }
+			input Filter { value: String }
+		`),
+	}}, graphqlast.SchemaLimits{})
+	if err != nil {
+		t.Fatalf("LoadSchema() error = %v", err)
+	}
+
+	accepted := []byte(`{
+		__schema { description }
+		__type(name: "String") { specifiedByURL }
+	}`)
+	operation, err := graphqlast.Intake(accepted, graphqlast.IntakeLimits{}, schema)
+	if err != nil || operation == nil {
+		t.Fatalf("Intake(October 2021 introspection) = (%v, %v), want operation", operation, err)
+	}
+
+	rejected := map[string]string{
+		"oneOf flag":                     `{ __type(name: "Filter") { isOneOf } }`,
+		"input-field deprecation arg":    `{ __type(name: "Filter") { inputFields(includeDeprecated: true) { name } } }`,
+		"input-value deprecated flag":    `{ __type(name: "Filter") { inputFields { isDeprecated } } }`,
+		"field-argument deprecation":     `{ __type(name: "Query") { fields { args(includeDeprecated: true) { name } } } }`,
+		"directive-argument deprecation": `{ __schema { directives { args(includeDeprecated: true) { name } } }`,
+	}
+	for name, document := range rejected {
+		name, document := name, document
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			operation, err := graphqlast.Intake([]byte(document), graphqlast.IntakeLimits{}, schema)
+			assertTypedErrorAndNilOperation(t, operation, err)
+		})
+	}
+}
+
 func assertSchemaDiagnostics(
 	t *testing.T,
 	schema *graphqlast.Schema,

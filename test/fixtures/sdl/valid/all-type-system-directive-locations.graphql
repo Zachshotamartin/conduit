@@ -1,0 +1,15 @@
+directive @tag on SCHEMA | SCALAR | OBJECT | FIELD_DEFINITION | ARGUMENT_DEFINITION | INTERFACE | UNION | ENUM | ENUM_VALUE | INPUT_OBJECT | INPUT_FIELD_DEFINITION
+directive @holder(value: String @tag) on FIELD_DEFINITION
+schema @tag { query: Query }
+scalar Timestamp @tag
+interface Node @tag { id(format: String @tag): ID! @tag }
+type Item implements Node @tag { id(format: String @tag): ID! @tag }
+union Search @tag = Item
+enum Status @tag { OPEN @tag }
+input Filter @tag { value: String @tag }
+type Query @tag {
+  node(filter: Filter @tag): Node @tag @holder(value: "ok")
+  search: Search
+  at: Timestamp
+  status: Status
+}

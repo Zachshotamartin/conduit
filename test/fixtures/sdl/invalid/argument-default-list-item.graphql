@@ -1,0 +1,1 @@
+type Query { value(numbers: [Int!] = [1, "bad"]): String }

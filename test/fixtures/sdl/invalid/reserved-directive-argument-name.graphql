@@ -1,0 +1,2 @@
+directive @tag(__private: String) on FIELD_DEFINITION
+type Query { value: String }

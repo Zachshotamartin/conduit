@@ -1,0 +1,3 @@
+input Inner { count: Int! }
+input Outer { inner: Inner! }
+type Query { value(input: Outer = {inner: {count: "bad"}}): String }

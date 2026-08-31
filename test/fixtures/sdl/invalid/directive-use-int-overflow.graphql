@@ -1,0 +1,2 @@
+directive @tag(value: Int!) on FIELD_DEFINITION
+type Query { value: String @tag(value: 2147483648) }

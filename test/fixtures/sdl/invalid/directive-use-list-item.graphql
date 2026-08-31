@@ -1,0 +1,2 @@
+directive @tag(values: [Int!]!) on FIELD_DEFINITION
+type Query { value: String @tag(values: [1, "bad"]) }

@@ -1,0 +1,6 @@
+input NullableCycle { next: NullableCycle }
+input ListCycle { next: [ListCycle!]! }
+type Query {
+  nullable(input: NullableCycle): String
+  listed(input: ListCycle): String
+}

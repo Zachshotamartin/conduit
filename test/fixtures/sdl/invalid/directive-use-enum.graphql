@@ -1,0 +1,3 @@
+enum Status { OPEN }
+directive @tag(value: Status!) on FIELD_DEFINITION
+type Query { value: String @tag(value: CLOSED) }

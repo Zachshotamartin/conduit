@@ -261,6 +261,45 @@ func TestUNIT002_ConduitDirectiveSignaturesAreExactAndClosed(t *testing.T) {
 	}
 }
 
+func TestUNIT002_AccumulatesIndependentTypeSystemRulesWithoutCompilerGuard(t *testing.T) {
+	t.Parallel()
+	loaded, err := graphqlschema.LoadSources([]graphqlast.SchemaSource{{
+		Name: "aggregate/type-system.graphql",
+		Input: []byte(`
+			directive @tag(value: Int!) on SCHEMA
+			schema @tag { query: Missing }
+			type __Bad
+			union Broken = String
+			input Loop { self: Loop! }
+			type Query { bad(arg: Int = "wrong"): String @unknown }
+		`),
+	}}, schemaOptions)
+	if loaded != nil {
+		t.Fatal("LoadSources() returned a partial schema")
+	}
+	items := diagnosticsFrom(t, err).Items()
+	want := map[string]int{
+		"graphql.sdl.root_known_type":         1,
+		"graphql.directive.required_argument": 1,
+		"graphql.sdl.reserved_name":           1,
+		"graphql.sdl.nonempty_object":         1,
+		"graphql.sdl.union_member_object":     1,
+		"graphql.sdl.input_cycle":             1,
+		"graphql.sdl.argument_default":        1,
+		"graphql.directive.known":             1,
+	}
+	got := make(map[string]int, len(items))
+	for _, item := range items {
+		if item.Rule == "graphql.sdl.compiler_guard" || item.Rule == "graphql.sdl.validation" {
+			t.Fatalf("authored error escaped to final compiler: %v", err)
+		}
+		got[item.Rule]++
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("rules = %v, want %v: %v", got, want, err)
+	}
+}
+
 func TestUNIT002_LoadFilesRejectsUnsafeLogicalNameBeforePhysicalRead(t *testing.T) {
 	t.Parallel()
 	physical := filepath.Join(t.TempDir(), "must-not-leak.graphql")

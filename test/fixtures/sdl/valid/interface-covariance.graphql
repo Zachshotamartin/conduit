@@ -1,0 +1,13 @@
+interface Node { id: ID! }
+type Item implements Node { id: ID! }
+union SearchResult = Item
+interface Contract {
+  node: Node
+  result: SearchResult
+  nodes: [Node]
+}
+type Query implements Contract {
+  node: Item!
+  result: Item
+  nodes: [Item!]!
+}
