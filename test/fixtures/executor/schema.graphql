@@ -1,0 +1,55 @@
+enum Role {
+  ADMIN
+  USER
+}
+
+input UserFilter {
+  name: String = "any"
+  tags: [String!] = []
+}
+
+interface Node {
+  id: ID!
+}
+
+type User implements Node {
+  id: ID!
+  name: String!
+  nickname: String
+  tags: [String!]!
+  friend: User
+  profile: Profile
+  role: Role
+  score: Float
+  active: Boolean
+}
+
+type Profile {
+  city: String!
+  zip: Int
+}
+
+type Echo {
+  text: String!
+  count: Int
+  flags: [Boolean!]!
+}
+
+union SearchHit = User | Profile
+
+type Query {
+  user(id: ID!, includeFriend: Boolean = false): User @source(name: "fixture")
+  users(limit: Int = 2): [User!]! @source(name: "fixture")
+  nullableUsers: [User] @source(name: "fixture")
+  node(id: ID!): Node @source(name: "fixture")
+  hit: SearchHit @source(name: "fixture")
+  echo(text: String!, count: Int, flags: [Boolean!] = []): Echo @source(name: "fixture")
+  search(filter: UserFilter, ids: [ID!]!): [User!]! @source(name: "fixture")
+  matrix: [[Int!]!] @source(name: "fixture")
+}
+
+type Mutation {
+  first(value: String!): String @source(name: "fixture")
+  second(value: String!): String @source(name: "fixture")
+  third(value: String!): String @source(name: "fixture")
+}

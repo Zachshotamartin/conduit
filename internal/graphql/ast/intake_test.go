@@ -5,6 +5,7 @@ import (
 	stderrors "errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -289,6 +290,86 @@ func TestUNIT003_OperationReportsParsedDocumentShape(t *testing.T) {
 	}
 	if got := operation.FragmentCount(); got != 1 {
 		t.Fatalf("FragmentCount() = %d, want 1", got)
+	}
+}
+
+func TestUNIT006_OperationSnapshotIsResolvedVendorFreeAndDefensive(t *testing.T) {
+	t.Parallel()
+	schema, err := graphqlast.LoadSchema([]graphqlast.SchemaSource{{
+		Name: "schema.graphql",
+		Input: []byte(`
+			input Filter { tag: String = "default" }
+			interface Node { id: ID! }
+			type User implements Node { id: ID!, name: String! }
+			type Query { node(id: ID!, filter: Filter): Node }
+		`),
+	}}, graphqlast.SchemaLimits{})
+	if err != nil {
+		t.Fatalf("LoadSchema() error = %v", err)
+	}
+	operation, err := graphqlast.Intake([]byte(`
+		query Lookup(
+			$id: ID! = "u1",
+			$show: Boolean! = true,
+			$filter: Filter = {tag: "chosen"}
+		) @skip(if: false) {
+			alias: node(id: $id, filter: $filter) @include(if: $show) {
+				__typename
+				...NodeFields @skip(if: false)
+				... on User { name }
+			}
+		}
+		fragment NodeFields on Node { id }
+	`), graphqlast.IntakeLimits{}, schema)
+	if err != nil {
+		t.Fatalf("Intake() error = %v", err)
+	}
+
+	snapshot := operation.Snapshot()
+	if len(snapshot.Operations) != 1 || len(snapshot.Fragments) != 1 {
+		t.Fatalf("Snapshot() shape = %d operations, %d fragments", len(snapshot.Operations), len(snapshot.Fragments))
+	}
+	definition := snapshot.Operations[0]
+	if definition.Kind != graphqlast.OperationQuery || definition.Name != "Lookup" || len(definition.Variables) != 3 {
+		t.Fatalf("operation definition = %#v", definition)
+	}
+	if definition.Variables[0].Name != "id" || definition.Variables[0].Type.Named != "ID" ||
+		!definition.Variables[0].Type.NonNull || definition.Variables[0].DefaultValue == nil ||
+		definition.Variables[0].DefaultValue.Kind != graphqlast.ValueString {
+		t.Fatalf("id variable = %#v", definition.Variables[0])
+	}
+	if len(definition.Directives) != 1 || definition.Directives[0].Name != "skip" {
+		t.Fatalf("operation directives = %#v", definition.Directives)
+	}
+	if len(definition.SelectionSet) != 1 || definition.SelectionSet[0].Kind != graphqlast.SelectionField {
+		t.Fatalf("root selection = %#v", definition.SelectionSet)
+	}
+	field := definition.SelectionSet[0].Field
+	if field.Name != "node" || field.Alias != "alias" || field.ParentType != "Query" ||
+		field.Type.Named != "Node" || len(field.Arguments) != 2 || len(field.SelectionSet) != 3 {
+		t.Fatalf("resolved field = %#v", field)
+	}
+	if field.Arguments[0].Value.Kind != graphqlast.ValueVariable || field.Arguments[0].Value.Raw != "id" {
+		t.Fatalf("field argument = %#v", field.Arguments[0])
+	}
+	if field.SelectionSet[1].Kind != graphqlast.SelectionFragmentSpread ||
+		field.SelectionSet[2].Kind != graphqlast.SelectionInlineFragment {
+		t.Fatalf("nested selections = %#v", field.SelectionSet)
+	}
+	if snapshot.Fragments[0].Name != "NodeFields" || snapshot.Fragments[0].TypeCondition != "Node" {
+		t.Fatalf("fragment = %#v", snapshot.Fragments[0])
+	}
+	if strings.Contains(reflect.TypeOf(snapshot).String(), "gqlparser") {
+		t.Fatalf("operation snapshot leaks parser type: %T", snapshot)
+	}
+
+	snapshot.Operations[0].Name = "mutated"
+	snapshot.Operations[0].SelectionSet[0].Field.Arguments[0].Value.Raw = "mutated"
+	snapshot.Fragments[0].SelectionSet[0].Field.Name = "mutated"
+	again := operation.Snapshot()
+	if again.Operations[0].Name != "Lookup" || again.Operations[0].SelectionSet[0].Field.Arguments[0].Value.Raw != "id" ||
+		again.Fragments[0].SelectionSet[0].Field.Name != "id" {
+		t.Fatalf("Snapshot() exposed operation state: %#v", again)
 	}
 }
 

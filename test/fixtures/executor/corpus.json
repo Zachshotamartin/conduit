@@ -1,0 +1,615 @@
+{
+  "values": {
+    "user": {
+      "id": "u1",
+      "name": "Ada",
+      "nickname": null,
+      "tags": ["go", "graphql"],
+      "friend": {
+        "id": "u2",
+        "name": "Lin",
+        "nickname": "L",
+        "tags": ["systems"],
+        "friend": null,
+        "profile": {"city": "SF", "zip": 94107},
+        "role": "USER",
+        "score": 8,
+        "active": false
+      },
+      "profile": {"city": "LA", "zip": 90001},
+      "role": "ADMIN",
+      "score": 9.5,
+      "active": true
+    },
+    "users": [
+      {
+        "id": "u1",
+        "name": "Ada",
+        "nickname": null,
+        "tags": ["go", "graphql"],
+        "friend": null,
+        "profile": {"city": "LA", "zip": 90001},
+        "role": "ADMIN",
+        "score": 9.5,
+        "active": true
+      },
+      {
+        "id": "u2",
+        "name": "Lin",
+        "nickname": "L",
+        "tags": ["systems"],
+        "friend": null,
+        "profile": {"city": "SF", "zip": 94107},
+        "role": "USER",
+        "score": 8,
+        "active": false
+      }
+    ],
+    "node_user": {
+      "__typename": "User",
+      "id": "u1",
+      "name": "Ada",
+      "nickname": null,
+      "tags": ["go", "graphql"],
+      "friend": null,
+      "profile": {"city": "LA", "zip": 90001},
+      "role": "ADMIN",
+      "score": 9.5,
+      "active": true
+    },
+    "hit_user": {
+      "__typename": "User",
+      "id": "u1",
+      "name": "Ada",
+      "nickname": null,
+      "tags": ["go"],
+      "friend": null,
+      "profile": null,
+      "role": "ADMIN",
+      "score": 9.5,
+      "active": true
+    },
+    "hit_profile": {"__typename": "Profile", "city": "LA", "zip": 90001},
+    "echo": {"text": "hello", "count": 2, "flags": [true, false]},
+    "matrix": [[1, 2], [3]],
+    "null": null,
+    "user_null_name": {
+      "id": "u1",
+      "name": null,
+      "nickname": null,
+      "tags": ["go"],
+      "friend": null,
+      "profile": null,
+      "role": "ADMIN",
+      "score": 9.5,
+      "active": true
+    },
+    "nullable_users_bad": [
+      {
+        "id": "u1",
+        "name": null,
+        "nickname": null,
+        "tags": ["go"],
+        "friend": null,
+        "profile": null,
+        "role": "ADMIN",
+        "score": 9.5,
+        "active": true
+      }
+    ],
+    "users_bad": [
+      {
+        "id": "u1",
+        "name": null,
+        "nickname": null,
+        "tags": ["go"],
+        "friend": null,
+        "profile": null,
+        "role": "ADMIN",
+        "score": 9.5,
+        "active": true
+      }
+    ],
+    "one": "one"
+  },
+  "cases": [
+    {
+      "name": "basic_id",
+      "feature": "field_collection",
+      "document": "{ user(id: \"u1\") { id } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "basic_name",
+      "feature": "field_collection",
+      "document": "{ user(id: \"u1\") { name } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"name":"Ada"}}}
+    },
+    {
+      "name": "basic_multiple_fields",
+      "feature": "field_collection",
+      "document": "{ user(id: \"u1\") { id name active } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1","name":"Ada","active":true}}}
+    },
+    {
+      "name": "alias_root",
+      "feature": "aliases",
+      "document": "{ viewer: user(id: \"u1\") { id } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"viewer":{"id":"u1"}}}
+    },
+    {
+      "name": "alias_nested",
+      "feature": "aliases",
+      "document": "{ user(id: \"u1\") { identifier: id display: name } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"identifier":"u1","display":"Ada"}}}
+    },
+    {
+      "name": "duplicate_field_merge",
+      "feature": "field_collection",
+      "document": "{ user(id: \"u1\") { id } user(id: \"u1\") { name } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1","name":"Ada"}}}
+    },
+    {
+      "name": "nested_profile",
+      "feature": "field_collection",
+      "document": "{ user(id: \"u1\") { profile { city zip } } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"profile":{"city":"LA","zip":90001}}}}
+    },
+    {
+      "name": "nested_friend",
+      "feature": "field_collection",
+      "document": "{ user(id: \"u1\") { friend { id name } } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"friend":{"id":"u2","name":"Lin"}}}}
+    },
+    {
+      "name": "scalar_list",
+      "feature": "field_collection",
+      "document": "{ user(id: \"u1\") { tags } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"tags":["go","graphql"]}}}
+    },
+    {
+      "name": "scalar_mixed",
+      "feature": "field_collection",
+      "document": "{ user(id: \"u1\") { role score active nickname } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"role":"ADMIN","score":9.5,"active":true,"nickname":null}}}
+    },
+    {
+      "name": "multiple_roots",
+      "feature": "field_collection",
+      "document": "{ user(id: \"u1\") { id } echo(text: \"hello\") { text } }",
+      "responses": {"Query.user": "user", "Query.echo": "echo"},
+      "want": {"data":{"user":{"id":"u1"},"echo":{"text":"hello"}}}
+    },
+    {
+      "name": "named_operation",
+      "feature": "field_collection",
+      "document": "query Viewer { user(id: \"u1\") { id name } }",
+      "operation_name": "Viewer",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1","name":"Ada"}}}
+    },
+    {
+      "name": "named_fragment",
+      "feature": "fragments",
+      "document": "query { user(id: \"u1\") { ...Core } } fragment Core on User { id name }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1","name":"Ada"}}}
+    },
+    {
+      "name": "nested_named_fragment",
+      "feature": "fragments",
+      "document": "query { user(id: \"u1\") { profile { ...Place } } } fragment Place on Profile { city zip }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"profile":{"city":"LA","zip":90001}}}}
+    },
+    {
+      "name": "inline_fragment_without_condition",
+      "feature": "fragments",
+      "document": "{ user(id: \"u1\") { ... { id name } } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1","name":"Ada"}}}
+    },
+    {
+      "name": "inline_fragment_on_user",
+      "feature": "type_conditions",
+      "document": "{ user(id: \"u1\") { ... on User { name } } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"name":"Ada"}}}
+    },
+    {
+      "name": "interface_named_fragment",
+      "feature": "type_conditions",
+      "document": "query { node(id: \"u1\") { ...NodeCore } } fragment NodeCore on Node { id }",
+      "responses": {"Query.node": "node_user"},
+      "want": {"data":{"node":{"id":"u1"}}}
+    },
+    {
+      "name": "interface_inline_concrete",
+      "feature": "type_conditions",
+      "document": "{ node(id: \"u1\") { id ... on User { name } } }",
+      "responses": {"Query.node": "node_user"},
+      "want": {"data":{"node":{"id":"u1","name":"Ada"}}}
+    },
+    {
+      "name": "union_user_branch",
+      "feature": "type_conditions",
+      "document": "{ hit { ... on User { id name } ... on Profile { city } } }",
+      "responses": {"Query.hit": "hit_user"},
+      "want": {"data":{"hit":{"id":"u1","name":"Ada"}}}
+    },
+    {
+      "name": "union_profile_branch",
+      "feature": "type_conditions",
+      "document": "{ hit { ... on User { id } ... on Profile { city zip } } }",
+      "responses": {"Query.hit": "hit_profile"},
+      "want": {"data":{"hit":{"city":"LA","zip":90001}}}
+    },
+    {
+      "name": "typename_object",
+      "feature": "type_conditions",
+      "document": "{ user(id: \"u1\") { __typename id } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"__typename":"User","id":"u1"}}}
+    },
+    {
+      "name": "typename_interface",
+      "feature": "type_conditions",
+      "document": "{ node(id: \"u1\") { __typename id } }",
+      "responses": {"Query.node": "node_user"},
+      "want": {"data":{"node":{"__typename":"User","id":"u1"}}}
+    },
+    {
+      "name": "typename_union",
+      "feature": "type_conditions",
+      "document": "{ hit { __typename ... on Profile { city } } }",
+      "responses": {"Query.hit": "hit_profile"},
+      "want": {"data":{"hit":{"__typename":"Profile","city":"LA"}}}
+    },
+    {
+      "name": "repeated_fragment_groups_once",
+      "feature": "fragments",
+      "document": "query { user(id: \"u1\") { ...Core ...Core } } fragment Core on User { id name }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1","name":"Ada"}}}
+    },
+    {
+      "name": "fragment_merge_preserves_first_order",
+      "feature": "fragments",
+      "document": "query { user(id: \"u1\") { name ...Core active } } fragment Core on User { id name }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"name":"Ada","id":"u1","active":true}}}
+    },
+    {
+      "name": "skip_true_root",
+      "feature": "directives",
+      "document": "{ user(id: \"u1\") @skip(if: true) { id } }",
+      "responses": {},
+      "want": {"data":{}}
+    },
+    {
+      "name": "skip_false_root",
+      "feature": "directives",
+      "document": "{ user(id: \"u1\") @skip(if: false) { id } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "include_false_root",
+      "feature": "directives",
+      "document": "{ user(id: \"u1\") @include(if: false) { id } }",
+      "responses": {},
+      "want": {"data":{}}
+    },
+    {
+      "name": "include_true_root",
+      "feature": "directives",
+      "document": "{ user(id: \"u1\") @include(if: true) { id } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "skip_variable_true",
+      "feature": "variables",
+      "document": "query($hide: Boolean!) { user(id: \"u1\") @skip(if: $hide) { id } }",
+      "variables": {"hide":true},
+      "responses": {},
+      "want": {"data":{}}
+    },
+    {
+      "name": "skip_variable_false",
+      "feature": "variables",
+      "document": "query($hide: Boolean!) { user(id: \"u1\") @skip(if: $hide) { id } }",
+      "variables": {"hide":false},
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "include_variable_true",
+      "feature": "variables",
+      "document": "query($show: Boolean!) { user(id: \"u1\") @include(if: $show) { id } }",
+      "variables": {"show":true},
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "include_variable_false",
+      "feature": "variables",
+      "document": "query($show: Boolean!) { user(id: \"u1\") @include(if: $show) { id } }",
+      "variables": {"show":false},
+      "responses": {},
+      "want": {"data":{}}
+    },
+    {
+      "name": "directive_variable_default",
+      "feature": "variables",
+      "document": "query($show: Boolean! = true) { user(id: \"u1\") @include(if: $show) { id } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "nested_skip_true",
+      "feature": "directives",
+      "document": "{ user(id: \"u1\") { id name @skip(if: true) } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "nested_include_false",
+      "feature": "directives",
+      "document": "{ user(id: \"u1\") { id profile @include(if: false) { city } } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "fragment_spread_skip",
+      "feature": "directives",
+      "document": "query { user(id: \"u1\") { id ...Core @skip(if: true) } } fragment Core on User { name }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "fragment_spread_include",
+      "feature": "directives",
+      "document": "query { user(id: \"u1\") { ...Core @include(if: true) } } fragment Core on User { id name }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1","name":"Ada"}}}
+    },
+    {
+      "name": "inline_fragment_skip",
+      "feature": "directives",
+      "document": "{ user(id: \"u1\") { id ... on User @skip(if: true) { name } } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "literal_id_and_field_default",
+      "feature": "coercion",
+      "document": "{ user(id: \"u1\") { id } }",
+      "responses": {"Query.user": "user"},
+      "calls": [{"field":"Query.user","args":{"id":"u1","includeFriend":false}}],
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "variable_id",
+      "feature": "variables",
+      "document": "query($id: ID!) { user(id: $id) { id } }",
+      "variables": {"id":"u1"},
+      "responses": {"Query.user": "user"},
+      "calls": [{"field":"Query.user","args":{"id":"u1","includeFriend":false}}],
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "integer_coerces_to_id_string",
+      "feature": "coercion",
+      "document": "query($id: ID!) { user(id: $id) { id } }",
+      "variables": {"id":7},
+      "responses": {"Query.user": "user"},
+      "calls": [{"field":"Query.user","args":{"id":"7","includeFriend":false}}],
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "variable_default_id",
+      "feature": "variables",
+      "document": "query($id: ID! = \"u1\") { user(id: $id) { id } }",
+      "responses": {"Query.user": "user"},
+      "calls": [{"field":"Query.user","args":{"id":"u1","includeFriend":false}}],
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "explicit_boolean_argument",
+      "feature": "coercion",
+      "document": "{ user(id: \"u1\", includeFriend: true) { id } }",
+      "responses": {"Query.user": "user"},
+      "calls": [{"field":"Query.user","args":{"id":"u1","includeFriend":true}}],
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "echo_literal_arguments",
+      "feature": "coercion",
+      "document": "{ echo(text: \"hello\", count: 2, flags: [true, false]) { text count flags } }",
+      "responses": {"Query.echo": "echo"},
+      "calls": [{"field":"Query.echo","args":{"count":2,"flags":[true,false],"text":"hello"}}],
+      "want": {"data":{"echo":{"text":"hello","count":2,"flags":[true,false]}}}
+    },
+    {
+      "name": "echo_optional_omitted",
+      "feature": "coercion",
+      "document": "{ echo(text: \"hello\") { text flags } }",
+      "responses": {"Query.echo": "echo"},
+      "calls": [{"field":"Query.echo","args":{"flags":[],"text":"hello"}}],
+      "want": {"data":{"echo":{"text":"hello","flags":[true,false]}}}
+    },
+    {
+      "name": "echo_variable_arguments",
+      "feature": "variables",
+      "document": "query($text: String!, $count: Int, $flags: [Boolean!]) { echo(text: $text, count: $count, flags: $flags) { text } }",
+      "variables": {"text":"hello","count":2,"flags":[true,false]},
+      "responses": {"Query.echo": "echo"},
+      "calls": [{"field":"Query.echo","args":{"count":2,"flags":[true,false],"text":"hello"}}],
+      "want": {"data":{"echo":{"text":"hello"}}}
+    },
+    {
+      "name": "singleton_coerces_to_list",
+      "feature": "coercion",
+      "document": "query($flags: [Boolean!]) { echo(text: \"hello\", flags: $flags) { flags } }",
+      "variables": {"flags":true},
+      "responses": {"Query.echo": "echo"},
+      "calls": [{"field":"Query.echo","args":{"flags":[true],"text":"hello"}}],
+      "want": {"data":{"echo":{"flags":[true,false]}}}
+    },
+    {
+      "name": "search_literal_input_defaults",
+      "feature": "coercion",
+      "document": "{ search(filter: {name: \"Ada\"}, ids: [\"u1\"]) { id } }",
+      "responses": {"Query.search": "users"},
+      "calls": [{"field":"Query.search","args":{"filter":{"name":"Ada","tags":[]},"ids":["u1"]}}],
+      "want": {"data":{"search":[{"id":"u1"},{"id":"u2"}]}}
+    },
+    {
+      "name": "search_variable_input_defaults",
+      "feature": "variables",
+      "document": "query($filter: UserFilter, $ids: [ID!]!) { search(filter: $filter, ids: $ids) { name } }",
+      "variables": {"filter":{"name":"Ada"},"ids":["u1"]},
+      "responses": {"Query.search": "users"},
+      "calls": [{"field":"Query.search","args":{"filter":{"name":"Ada","tags":[]},"ids":["u1"]}}],
+      "want": {"data":{"search":[{"name":"Ada"},{"name":"Lin"}]}}
+    },
+    {
+      "name": "search_singleton_ids",
+      "feature": "coercion",
+      "document": "query($ids: [ID!]!) { search(ids: $ids) { id } }",
+      "variables": {"ids":"u1"},
+      "responses": {"Query.search": "users"},
+      "calls": [{"field":"Query.search","args":{"ids":["u1"]}}],
+      "want": {"data":{"search":[{"id":"u1"},{"id":"u2"}]}}
+    },
+    {
+      "name": "optional_argument_explicit_null",
+      "feature": "coercion",
+      "document": "{ echo(text: \"hello\", count: null) { count } }",
+      "responses": {"Query.echo": "echo"},
+      "calls": [{"field":"Query.echo","args":{"count":null,"flags":[],"text":"hello"}}],
+      "want": {"data":{"echo":{"count":2}}}
+    },
+    {
+      "name": "root_argument_default",
+      "feature": "coercion",
+      "document": "{ users { id } }",
+      "responses": {"Query.users": "users"},
+      "calls": [{"field":"Query.users","args":{"limit":2}}],
+      "want": {"data":{"users":[{"id":"u1"},{"id":"u2"}]}}
+    },
+    {
+      "name": "list_literal_single_item",
+      "feature": "coercion",
+      "document": "{ echo(text: \"hello\", flags: [true]) { flags } }",
+      "responses": {"Query.echo": "echo"},
+      "calls": [{"field":"Query.echo","args":{"flags":[true],"text":"hello"}}],
+      "want": {"data":{"echo":{"flags":[true,false]}}}
+    },
+    {
+      "name": "input_list_values",
+      "feature": "coercion",
+      "document": "{ search(filter: {tags: [\"go\", \"graphql\"]}, ids: [\"u1\", \"u2\"]) { id } }",
+      "responses": {"Query.search": "users"},
+      "calls": [{"field":"Query.search","args":{"filter":{"name":"any","tags":["go","graphql"]},"ids":["u1","u2"]}}],
+      "want": {"data":{"search":[{"id":"u1"},{"id":"u2"}]}}
+    },
+    {
+      "name": "root_field_order",
+      "feature": "field_collection",
+      "document": "{ echo(text: \"hello\") { text } user(id: \"u1\") { id } }",
+      "responses": {"Query.echo": "echo", "Query.user": "user"},
+      "want": {"data":{"echo":{"text":"hello"},"user":{"id":"u1"}}}
+    },
+    {
+      "name": "nested_field_order",
+      "feature": "field_collection",
+      "document": "{ user(id: \"u1\") { active name id score } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"active":true,"name":"Ada","id":"u1","score":9.5}}}
+    },
+    {
+      "name": "aliased_same_field_different_arguments",
+      "feature": "aliases",
+      "document": "{ a: user(id: \"u1\") { id } b: user(id: \"u2\") { name } }",
+      "responses": {"Query.user": "user"},
+      "calls": [
+        {"field":"Query.user","args":{"id":"u1","includeFriend":false}},
+        {"field":"Query.user","args":{"id":"u2","includeFriend":false}}
+      ],
+      "want": {"data":{"a":{"id":"u1"},"b":{"name":"Ada"}}}
+    },
+    {
+      "name": "select_second_operation",
+      "feature": "field_collection",
+      "document": "query A { user(id: \"u1\") { name } } query B { user(id: \"u1\") { id } }",
+      "operation_name": "B",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1"}}}
+    },
+    {
+      "name": "mutation_single",
+      "feature": "mutation",
+      "document": "mutation { first(value: \"x\") }",
+      "responses": {"Mutation.first": "one"},
+      "calls": [{"field":"Mutation.first","args":{"value":"x"}}],
+      "ordered_calls": true,
+      "want": {"data":{"first":"one"}}
+    },
+    {
+      "name": "nullable_root_null",
+      "feature": "null_propagation",
+      "document": "{ user(id: \"u1\") { id } }",
+      "responses": {"Query.user": "null"},
+      "want": {"data":{"user":null}}
+    },
+    {
+      "name": "nullable_scalar_null",
+      "feature": "null_propagation",
+      "document": "{ user(id: \"u1\") { id nickname } }",
+      "responses": {"Query.user": "user"},
+      "want": {"data":{"user":{"id":"u1","nickname":null}}}
+    },
+    {
+      "name": "nonnull_child_bubbles_to_nullable_object",
+      "feature": "null_propagation",
+      "document": "{ user(id: \"u1\") { id name } }",
+      "responses": {"Query.user": "user_null_name"},
+      "want": {
+        "data":{"user":null},
+        "errors":[{"message":"data source returned an invalid response","path":["user","name"],"extensions":{"code":"source_invalid_response"}}]
+      }
+    },
+    {
+      "name": "nullable_list_preserves_bad_element_as_null",
+      "feature": "null_propagation",
+      "document": "{ nullableUsers { name } }",
+      "responses": {"Query.nullableUsers": "nullable_users_bad"},
+      "want": {
+        "data":{"nullableUsers":[null]},
+        "errors":[{"message":"data source returned an invalid response","path":["nullableUsers",0,"name"],"extensions":{"code":"source_invalid_response"}}]
+      }
+    },
+    {
+      "name": "nonnull_list_bubbles_to_root",
+      "feature": "null_propagation",
+      "document": "{ users { name } }",
+      "responses": {"Query.users": "users_bad"},
+      "want": {
+        "data":null,
+        "errors":[{"message":"data source returned an invalid response","path":["users",0,"name"],"extensions":{"code":"source_invalid_response"}}]
+      }
+    }
+  ]
+}
