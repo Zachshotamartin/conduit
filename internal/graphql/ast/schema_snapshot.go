@@ -140,6 +140,8 @@ func snapshotValue(value *gqlast.Value) Value {
 
 func snapshotValueKind(kind gqlast.ValueKind) ValueKind {
 	switch kind {
+	case gqlast.Variable:
+		return ValueVariable
 	case gqlast.IntValue:
 		return ValueInt
 	case gqlast.FloatValue:

@@ -153,14 +153,15 @@ type TypeRef struct {
 type ValueKind string
 
 const (
-	ValueInt     ValueKind = "INT"
-	ValueFloat   ValueKind = "FLOAT"
-	ValueString  ValueKind = "STRING"
-	ValueBoolean ValueKind = "BOOLEAN"
-	ValueNull    ValueKind = "NULL"
-	ValueEnum    ValueKind = "ENUM"
-	ValueList    ValueKind = "LIST"
-	ValueObject  ValueKind = "OBJECT"
+	ValueVariable ValueKind = "VARIABLE"
+	ValueInt      ValueKind = "INT"
+	ValueFloat    ValueKind = "FLOAT"
+	ValueString   ValueKind = "STRING"
+	ValueBoolean  ValueKind = "BOOLEAN"
+	ValueNull     ValueKind = "NULL"
+	ValueEnum     ValueKind = "ENUM"
+	ValueList     ValueKind = "LIST"
+	ValueObject   ValueKind = "OBJECT"
 )
 
 // Value is a parser-neutral SDL constant.
