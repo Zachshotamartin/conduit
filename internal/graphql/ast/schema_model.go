@@ -32,6 +32,17 @@ type Diagnostic struct {
 	Line    int
 	Column  int
 	Message string
+	Related []RelatedLocation
+}
+
+// RelatedLocation names a second source location needed to understand a
+// cross-document diagnostic. Related locations are rendered in their supplied
+// order and are always copied at the diagnostics boundary.
+type RelatedLocation struct {
+	File    string
+	Line    int
+	Column  int
+	Message string
 }
 
 // Diagnostics is an ordered collection of configuration failures. It keeps
@@ -42,7 +53,10 @@ type Diagnostics struct {
 
 // NewDiagnostics returns a sorted defensive diagnostic collection.
 func NewDiagnostics(items ...Diagnostic) *Diagnostics {
-	copied := append([]Diagnostic(nil), items...)
+	copied := make([]Diagnostic, len(items))
+	for index := range items {
+		copied[index] = cloneDiagnostic(items[index])
+	}
 	sort.SliceStable(copied, func(i, j int) bool {
 		left, right := copied[i], copied[j]
 		if left.File != right.File {
@@ -67,7 +81,11 @@ func (diagnostics *Diagnostics) Items() []Diagnostic {
 	if diagnostics == nil {
 		return nil
 	}
-	return append([]Diagnostic(nil), diagnostics.items...)
+	items := make([]Diagnostic, len(diagnostics.items))
+	for index := range diagnostics.items {
+		items[index] = cloneDiagnostic(diagnostics.items[index])
+	}
+	return items
 }
 
 func (diagnostics *Diagnostics) Error() string {
@@ -87,8 +105,28 @@ func (diagnostics *Diagnostics) Error() string {
 			result.WriteString(": ")
 		}
 		fmt.Fprintf(&result, "[%s] %s", item.Rule, item.Message)
+		for _, related := range item.Related {
+			result.WriteString("\n  related")
+			if related.File != "" {
+				result.WriteString(": ")
+				result.WriteString(related.File)
+				if related.Line > 0 {
+					fmt.Fprintf(&result, ":%d:%d", related.Line, related.Column)
+				}
+			}
+			if related.Message != "" {
+				result.WriteString(": ")
+				result.WriteString(related.Message)
+			}
+		}
 	}
 	return result.String()
+}
+
+func cloneDiagnostic(source Diagnostic) Diagnostic {
+	result := source
+	result.Related = append([]RelatedLocation(nil), source.Related...)
+	return result
 }
 
 // Unwrap classifies schema diagnostics without exposing their high-cardinality

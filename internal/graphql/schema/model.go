@@ -109,6 +109,23 @@ func (schema *Schema) Executable() *graphqlast.Schema {
 	return schema.executable
 }
 
+// Snapshot returns a defensive parser-neutral view for cross-document
+// compilation such as resolver bindings.
+func (schema *Schema) Snapshot() graphqlast.SchemaSnapshot {
+	if schema == nil || schema.executable == nil {
+		return graphqlast.SchemaSnapshot{}
+	}
+	return schema.executable.Snapshot()
+}
+
+// Anchor returns the unforgeable identity of the compiled serving schema.
+func (schema *Schema) Anchor() graphqlast.SchemaAnchor {
+	if schema == nil || schema.executable == nil {
+		return graphqlast.SchemaAnchor{}
+	}
+	return schema.executable.Anchor()
+}
+
 // Hash returns the stable semantic schema digest.
 func (schema *Schema) Hash() Hash {
 	if schema == nil {
