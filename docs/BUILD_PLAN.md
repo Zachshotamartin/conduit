@@ -694,7 +694,9 @@ field do not emit).
 
 Complexity accounting runs post-validation pre-execution: cost = Σ field
 costs × multiplier products; rejection carries computed cost in
-`extensions` (FR-GQL-009).
+`extensions` (FR-GQL-009). PRODUCT_REQUIREMENTS §5.2 is the normative
+definition of occurrence charging, fragment expansion, multiplier propagation,
+semantic depth, arithmetic, limit equality, and extension value types.
 
 Mutations emit publish mappings only after resolver success, into the
 recording `PublishSink` (asserted by tests; no delivery exists).

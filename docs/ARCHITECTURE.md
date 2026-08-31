@@ -508,7 +508,9 @@ Before any parsing (NFR-SEC-001, FR-GQL-011), in order, each with a typed reject
    introspection policy (FR-GQL-010, disabled fields are removed from validation, not execution), and
    variable coercion against declared types (FR-GQL-013).
 6. Complexity: walk the operation with `@complexity` costs and multipliers (default cost 1 per field,
-   ceiling 10,000); rejection returns the computed cost in `extensions` (FR-GQL-009).
+   ceiling 10,000); rejection returns the computed cost in `extensions` (FR-GQL-009). The exact field-
+   occurrence, fragment, multiplier-propagation, semantic-depth, arithmetic, and extension-value semantics
+   are the public contract in PRODUCT_REQUIREMENTS §5.2.
 
 ### 7.4 Executor design
 
