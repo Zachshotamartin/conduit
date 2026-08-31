@@ -171,7 +171,7 @@ func TestUNIT004_ArgumentValuesRejectEveryAmbiguousJSONShape(t *testing.T) {
 	}
 	for _, input := range invalid {
 		arguments, err := datasource.NewArgumentValues(input)
-		if err == nil || arguments.CanonicalJSON() != nil || arguments.Len() != 0 {
+		if err == nil || string(arguments.CanonicalJSON()) != "{}" || arguments.Len() != 0 {
 			t.Errorf("NewArgumentValues(%q) = (%s, %v), want rejected zero", input, arguments.CanonicalJSON(), err)
 		}
 	}
