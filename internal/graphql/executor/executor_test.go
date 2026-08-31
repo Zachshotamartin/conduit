@@ -45,9 +45,15 @@ type expectedCall struct {
 }
 
 type recordedCall struct {
-	Field  string
-	Args   string
-	Parent string
+	Field           string
+	Args            string
+	Parent          string
+	Tenant          string
+	Subject         string
+	PrincipalTenant string
+	Scopes          []string
+	Deadline        time.Time
+	ContextDeadline time.Time
 }
 
 type corpusSource struct {
@@ -60,8 +66,14 @@ type corpusSource struct {
 
 func (source *corpusSource) Name() string { return "fixture" }
 
-func (source *corpusSource) Resolve(_ context.Context, request *datasource.SourceRequest) (*datasource.SourceResponse, error) {
-	call := recordedCall{Field: request.Field.String(), Args: string(request.Args.CanonicalJSON())}
+func (source *corpusSource) Resolve(ctx context.Context, request *datasource.SourceRequest) (*datasource.SourceResponse, error) {
+	contextDeadline, _ := ctx.Deadline()
+	call := recordedCall{
+		Field: request.Field.String(), Args: string(request.Args.CanonicalJSON()),
+		Tenant: request.Tenant.String(), Subject: request.Principal.Subject(),
+		PrincipalTenant: request.Principal.Tenant().String(), Scopes: request.Principal.Scopes(),
+		Deadline: request.Deadline, ContextDeadline: contextDeadline,
+	}
 	if request.Parent != nil {
 		call.Parent = string(request.Parent)
 	}
@@ -86,7 +98,11 @@ func (source *corpusSource) Close(context.Context) error       { return nil }
 func (source *corpusSource) Calls() []recordedCall {
 	source.mu.Lock()
 	defer source.mu.Unlock()
-	return append([]recordedCall(nil), source.calls...)
+	result := append([]recordedCall(nil), source.calls...)
+	for index := range result {
+		result[index].Scopes = append([]string(nil), result[index].Scopes...)
+	}
+	return result
 }
 
 func TestUNIT006_SpecExecutionCorpusIsByteExact(t *testing.T) {
@@ -254,6 +270,96 @@ func TestUNIT006_SourceRequestIsNarrowedCanonicalAndDeadlineBound(t *testing.T) 
 	if calls[1].Field != "Query.item" || calls[1].Args != `{"id":"7"}` || calls[1].Parent != "" {
 		t.Fatalf("root source call = %#v", calls[1])
 	}
+	for _, call := range calls {
+		if call.Tenant != tenant.String() || call.Subject != principal.Subject() ||
+			call.PrincipalTenant != principal.Tenant().String() || !reflect.DeepEqual(call.Scopes, []string{"read"}) ||
+			!call.Deadline.Equal(deadline) || !call.ContextDeadline.Equal(deadline) {
+			t.Fatalf("narrowed request metadata = %#v", call)
+		}
+	}
+}
+
+func TestUNIT006_SourceJSONRejectsAmbiguousAndMalformedValues(t *testing.T) {
+	t.Parallel()
+	schema := loadSchema(t, `
+		type Query { payload: Payload @source(name: "fixture") }
+		type Payload { x: Int }
+	`)
+	table := loadBindings(t, schema, `bindings:
+  - field: Query.payload
+    source: fixture
+  - field: Payload.x
+    parent: [x]
+`)
+	for _, tc := range []struct {
+		name string
+		data []byte
+	}{
+		{name: "duplicate object member", data: []byte(`{"x":1,"x":2}`)},
+		{name: "trailing value", data: []byte(`{"x":1} {"x":2}`)},
+		{name: "malformed", data: []byte(`{"x":`)},
+		{name: "invalid UTF-8", data: []byte{'{', '"', 'x', '"', ':', '"', 0xff, '"', '}'}},
+		{name: "empty", data: nil},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			source := &rawSource{data: tc.data}
+			runtime, err := executor.New(executor.Config{Schema: schema, Bindings: table, Sources: []datasource.DataSource{source}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			operation, err := graphqlast.Intake([]byte(`{ payload { x } }`), graphqlast.IntakeLimits{}, schema.Executable())
+			if err != nil {
+				t.Fatal(err)
+			}
+			result := runtime.Execute(context.Background(), executor.Request{
+				Operation: operation, Tenant: testTenant(t), Principal: testPrincipal(t), Deadline: testDeadline(),
+			})
+			if len(result.Errors) != 1 || result.Errors[0].Code != conduiterrors.SourceInvalidResponse {
+				t.Fatalf("Execute() errors = %#v, want source_invalid_response", result.Errors)
+			}
+		})
+	}
+}
+
+func TestUNIT006_SourceTimeoutMidListIsPathScoped(t *testing.T) {
+	t.Parallel()
+	schema := loadSchema(t, `
+		type Query { items: [Item!]! @source(name: "fixture") }
+		type Item { id: ID!, remote: String @source(name: "fixture") }
+	`)
+	table := loadBindings(t, schema, `bindings:
+  - field: Query.items
+    source: fixture
+  - field: Item.id
+    parent: [id]
+  - field: Item.remote
+    source: fixture
+`)
+	source := &listTimeoutSource{}
+	runtime, err := executor.New(executor.Config{Schema: schema, Bindings: table, Sources: []datasource.DataSource{source}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation, err := graphqlast.Intake([]byte(`{ items { id remote } }`), graphqlast.IntakeLimits{}, schema.Executable())
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := runtime.Execute(context.Background(), executor.Request{
+		Operation: operation, Tenant: testTenant(t), Principal: testPrincipal(t), Deadline: testDeadline(),
+	})
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := compactJSON(t, json.RawMessage(`{
+		"data":{"items":[{"id":"1","remote":"ok"},{"id":"2","remote":null}]},
+		"errors":[{"message":"data source timed out","path":["items",1,"remote"],"extensions":{"code":"source_timeout"}}]
+	}`))
+	if !bytes.Equal(encoded, want) {
+		t.Fatalf("mid-list timeout response\n got: %s\nwant: %s", encoded, want)
+	}
 }
 
 func TestUNIT006_OperationSelectionAndVariableFailuresNeverCallSources(t *testing.T) {
@@ -317,6 +423,7 @@ func TestUNIT006_ExecutorRejectsArtifactAndSourceMismatches(t *testing.T) {
 		{name: "anchor mismatch", config: executor.Config{Schema: schema, Bindings: otherTable, Sources: []datasource.DataSource{validSource}}},
 		{name: "nil source", config: executor.Config{Schema: schema, Bindings: table, Sources: []datasource.DataSource{nil}}},
 		{name: "duplicate source", config: executor.Config{Schema: schema, Bindings: table, Sources: []datasource.DataSource{validSource, validSource}}},
+		{name: "missing bound source", config: executor.Config{Schema: schema, Bindings: table}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -354,6 +461,14 @@ func assertCalls(t *testing.T, actual []recordedCall, corpusCase executionCase) 
 		for index := range actual {
 			actual[index].Args = ""
 		}
+	}
+	for index := range actual {
+		actual[index].Tenant = ""
+		actual[index].Subject = ""
+		actual[index].PrincipalTenant = ""
+		actual[index].Scopes = nil
+		actual[index].Deadline = time.Time{}
+		actual[index].ContextDeadline = time.Time{}
 	}
 	if !corpusCase.OrderedCalls {
 		sort.Slice(actual, func(i, j int) bool {
@@ -445,3 +560,33 @@ func testPrincipal(t *testing.T) datasource.PrincipalView {
 func testDeadline() time.Time {
 	return time.Unix(1_900_000_000, 0).UTC()
 }
+
+type rawSource struct {
+	data []byte
+}
+
+func (*rawSource) Name() string { return "fixture" }
+func (source *rawSource) Resolve(context.Context, *datasource.SourceRequest) (*datasource.SourceResponse, error) {
+	return &datasource.SourceResponse{Data: append([]byte(nil), source.data...)}, nil
+}
+func (*rawSource) HealthCheck(context.Context) error { return nil }
+func (*rawSource) Close(context.Context) error       { return nil }
+
+type listTimeoutSource struct{}
+
+func (*listTimeoutSource) Name() string { return "fixture" }
+func (*listTimeoutSource) Resolve(_ context.Context, request *datasource.SourceRequest) (*datasource.SourceResponse, error) {
+	switch request.Field.String() {
+	case "Query.items":
+		return &datasource.SourceResponse{Data: []byte(`[{"id":"1"},{"id":"2"}]`)}, nil
+	case "Item.remote":
+		if bytes.Contains(request.Parent, []byte(`"id":"2"`)) {
+			return nil, conduiterrors.New(conduiterrors.SourceTimeout)
+		}
+		return &datasource.SourceResponse{Data: []byte(`"ok"`)}, nil
+	default:
+		return nil, conduiterrors.New(conduiterrors.InternalInvariant)
+	}
+}
+func (*listTimeoutSource) HealthCheck(context.Context) error { return nil }
+func (*listTimeoutSource) Close(context.Context) error       { return nil }

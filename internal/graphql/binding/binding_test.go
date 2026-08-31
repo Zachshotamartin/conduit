@@ -130,6 +130,14 @@ func TestUNIT005_ValidBindingClosureIsCompleteImmutableAndSchemaAnchored(t *test
 	if !strings.HasPrefix(table.Hash().String(), "sha256:") {
 		t.Fatalf("binding hash = %q, want algorithm-qualified SHA-256", table.Hash().String())
 	}
+	sourceNames := table.SourceNames()
+	if !reflect.DeepEqual(sourceNames, []string{"analytics", "users"}) {
+		t.Fatalf("SourceNames() = %v", sourceNames)
+	}
+	sourceNames[0] = "mutated"
+	if !reflect.DeepEqual(table.SourceNames(), []string{"analytics", "users"}) {
+		t.Fatalf("SourceNames() aliases table state: %v", table.SourceNames())
+	}
 
 	viewer := mustField(t, "Query.viewer")
 	viewerBinding, ok := table.Lookup(viewer)
