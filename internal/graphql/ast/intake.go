@@ -7,6 +7,7 @@ import (
 	gqlast "github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/lexer"
 	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/vektah/gqlparser/v2/validator"
 )
 
 const (
@@ -34,6 +35,16 @@ type IntakeLimits struct {
 // document. The underlying parser representation remains confined here.
 type Operation struct {
 	document *gqlast.QueryDocument
+	anchor   SchemaAnchor
+}
+
+type schemaIdentity struct{ _ byte }
+
+// SchemaAnchor is an opaque, comparable identity for one immutable compiled
+// schema. Its unexported identity cannot be forged by callers; the zero value
+// means that no schema participated in admission.
+type SchemaAnchor struct {
+	identity *schemaIdentity
 }
 
 // OperationCount returns the number of operation definitions admitted from
@@ -55,13 +66,34 @@ func (operation *Operation) FragmentCount() int {
 }
 
 // Schema is Conduit's opaque representation of a validated GraphQL schema.
-// Schema construction and validation are added by R1.02.
-type Schema struct{}
+// The parser-owned representation never crosses this package boundary.
+type Schema struct {
+	document *gqlast.Schema
+	snapshot SchemaSnapshot
+	anchor   SchemaAnchor
+}
+
+// Anchor returns the immutable schema identity used by operation admission
+// and later binding tables.
+func (schema *Schema) Anchor() SchemaAnchor {
+	if schema == nil {
+		return SchemaAnchor{}
+	}
+	return schema.anchor
+}
+
+// Anchor returns the schema identity under which this operation was admitted.
+func (operation *Operation) Anchor() SchemaAnchor {
+	if operation == nil {
+		return SchemaAnchor{}
+	}
+	return operation.anchor
+}
 
 // Intake parses doc after enforcing byte, lexical-token, and syntactic-depth
 // limits. It returns no partial Operation on rejection. Schema validation is
 // added by R1.02; schema is retained in this gate's stable intake signature.
-func Intake(doc []byte, limits IntakeLimits, _ *Schema) (*Operation, error) {
+func Intake(doc []byte, limits IntakeLimits, schema *Schema) (*Operation, error) {
 	limits = limits.withDefaults()
 	if len(doc) > limits.MaxBytes {
 		return nil, invalidRequest(errByteLimit)
@@ -79,7 +111,14 @@ func Intake(doc []byte, limits IntakeLimits, _ *Schema) (*Operation, error) {
 	if err != nil {
 		return nil, invalidRequest(err)
 	}
-	return &Operation{document: document}, nil
+	anchor := SchemaAnchor{}
+	if schema != nil {
+		if validationErrors := validator.ValidateWithRules(schema.document, document, nil); len(validationErrors) > 0 {
+			return nil, invalidRequest(validationErrors)
+		}
+		anchor = schema.anchor
+	}
+	return &Operation{document: document, anchor: anchor}, nil
 }
 
 func (limits IntakeLimits) withDefaults() IntakeLimits {
