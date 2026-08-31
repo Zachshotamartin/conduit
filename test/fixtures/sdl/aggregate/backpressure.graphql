@@ -1,0 +1,1 @@
+extend type Subscription { queueFailure: String @backpressure(queue: 0) }

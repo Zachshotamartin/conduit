@@ -1,0 +1,2 @@
+type Query { ok: Boolean }
+type Subscription { events(tags: [String!] @filterable): String }

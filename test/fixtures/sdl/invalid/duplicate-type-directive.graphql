@@ -1,0 +1,2 @@
+directive @tag on OBJECT
+type Query @tag @tag { ok: Boolean }

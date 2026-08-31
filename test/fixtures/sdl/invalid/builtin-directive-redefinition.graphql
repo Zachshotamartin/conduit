@@ -1,0 +1,2 @@
+directive @skip(if: Boolean!) on FIELD
+type Query { ok: Boolean }

@@ -1,0 +1,1 @@
+extend type Query { sourceFailure: String @source(name: "missing") }

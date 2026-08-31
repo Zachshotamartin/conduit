@@ -1,0 +1,6 @@
+schema {
+  query: Query
+  query: OtherQuery
+}
+type Query { first: String }
+type OtherQuery { second: String }

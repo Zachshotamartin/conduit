@@ -1,0 +1,4 @@
+type Query { ok: Boolean }
+type Subscription {
+  events: String @backpressure(policy: COALESCE_BY_KEY, coalesceKey: "")
+}

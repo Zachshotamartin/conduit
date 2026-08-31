@@ -1,0 +1,1 @@
+type Query @auth(rule: "allow") { ok: Boolean }

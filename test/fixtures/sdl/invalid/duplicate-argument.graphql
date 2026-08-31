@@ -1,0 +1,3 @@
+type Query {
+  field(id: ID, id: String): String
+}

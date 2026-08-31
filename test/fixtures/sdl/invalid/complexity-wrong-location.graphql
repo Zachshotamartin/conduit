@@ -1,0 +1,1 @@
+type Query @complexity(cost: 1) { ok: Boolean }

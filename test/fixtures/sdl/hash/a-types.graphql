@@ -1,0 +1,5 @@
+"A visible viewer."
+type Viewer {
+  id: ID!
+  name: String
+}

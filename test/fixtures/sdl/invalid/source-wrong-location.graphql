@@ -1,0 +1,1 @@
+type Query @source(name: "db") { ok: Boolean }
