@@ -37,21 +37,26 @@ Commit `e05a5043fe167d91900fce191ca966a26bc4ea30` removed that fixture. The
 17-check matrix above then returned fully green. The deliberate fixture does
 not exist in the current tree.
 
-## GitHub-hosted blockers
+## GitHub-hosted status
+
+The repository owner authorized early publication in ADR-0014. The checked-in
+branch-protection policy has now been applied and verified by API read-back;
+the former account-tier blocker is resolved. Exact evidence is recorded in
+[branch-protection.md](branch-protection.md) and
+[publication-audit.md](publication-audit.md).
 
 R0 remains `in progress` because two acceptance conditions are still
 unsatisfied:
 
-1. Both the branch-protection `PUT` and read-back `GET` return HTTP 403 with
-   GitHub's instruction to upgrade to Pro or make the repository public. The
-   exact policy and unblock commands are recorded in
-   [branch-protection.md](branch-protection.md). The repository must remain
-   private until R10, so visibility was not weakened.
+1. PR #1 requires an approval from an eligible GitHub account other than its
+   author, followed by a green rerun on the final protected head.
 2. `nightly.yml` has not completed a scheduled run. A CLI dispatch attempt on
    `gate/r0` returned HTTP 404 because GitHub requires the workflow to exist on
    the default branch before it can be manually dispatched. Scheduled
-   workflows are likewise evaluated from the default branch, but R0 cannot be
-   merged until its acceptance checklist is complete.
+   workflows are likewise evaluated from the default branch. ADR-0014 records
+   the two-phase finalization: merge only after review and protected checks,
+   then record R0 acceptance after the first real schedule-triggered run.
 
 No R0 claim is earned, the PR remains a draft, and R1 must not start while
-these blockers remain.
+these blockers remain except for the provisional ordered work authorized by
+ADR-0013. No later gate may merge first.

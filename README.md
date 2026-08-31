@@ -104,9 +104,13 @@ are specified in
 | [docs/MARKETING_PLAN.md](docs/MARKETING_PLAN.md) | Positioning, claims register, launch assets — gated like everything else |
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | Controlled definitions |
 | [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md) | Deferred decisions with fail-closed defaults and reopen triggers |
-| [docs/decisions/](docs/decisions/) | ADR-0001…0012: language, protocol, executor, bus, state ownership, index, delivery contract, refresh/revocation, tenancy, observability, platforms, security-supported toolchain |
+| [docs/decisions/](docs/decisions/) | ADR-0001…0014: product/architecture decisions plus provisional gate stacking and explicitly authorized early publication |
 
 ## License and status of claims
+
+This repository is publicly visible but currently has no project license
+grant. Public access does not make it open source or grant permission to copy,
+modify, or redistribute it.
 
 Every statement in this repository about performance, scale, security, or
 compatibility is governed by the claims discipline in

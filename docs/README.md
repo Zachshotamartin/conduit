@@ -78,6 +78,9 @@ Read these documents first and in this order:
   connection-state ownership, predicate index structure, delivery guarantee,
   token refresh and revocation, multi-tenancy isolation, observability stack,
   supported platforms, and the security-supported toolchain pin.
+- ADR-0013 and ADR-0014 record the provisional gate stack and the owner's
+  subsequent authorization to make the repository public before R10 without
+  promoting any gate or product claim.
 - A reversal of any accepted decision requires a new ADR that supersedes the
   old one. Silent edits to an earlier decision are forbidden.
 

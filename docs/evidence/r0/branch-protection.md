@@ -3,18 +3,21 @@
 Status: in progress.
 
 The intended `main` protection policy is checked in at
-`.github/branch-protection.json`. On 2026-08-30, applying that policy to
-the private `Zachshotamartin/conduit` repository returned GitHub HTTP 403:
-private-repository branch protection requires GitHub Pro for this account.
+`.github/branch-protection.json`. On 2026-08-30, applying that policy while the
+repository was private returned GitHub HTTP 403 because the account tier did
+not include private-repository branch protection. The repository owner then
+authorized early public visibility in ADR-0014.
 
-R0.02 and R0 acceptance remain blocked until the account is upgraded or the
-repository reaches the R10 publication gate. The policy must not be weakened
-to bypass this prerequisite.
-
-After the prerequisite changes, apply and verify the policy with:
+After publication, these commands succeeded:
 
 ```sh
 gh api --method PUT repos/Zachshotamartin/conduit/branches/main/protection \
   --input .github/branch-protection.json
 gh api repos/Zachshotamartin/conduit/branches/main/protection
 ```
+
+Read-back confirmed strict required checks, one approving review,
+stale-review dismissal, administrator enforcement, required linear history,
+and disabled force pushes and deletion. The remaining R0 blockers are the
+independent approval and a real schedule-triggered nightly run after the
+workflow reaches the default branch.

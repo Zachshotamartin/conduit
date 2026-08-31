@@ -103,13 +103,15 @@ No other reordering is permitted without an ADR.
 
 ### 2.1 What exists
 
-The private GitHub repository, this documentation set, the twelve accepted
+The public GitHub repository, this documentation set, the fourteen accepted
 ADRs, the exact Go toolchain pin, repository-local developer bootstrap,
 deterministic clock and error foundations, configuration contracts, and R0
-checks/workflow scaffolding are in progress on `gate/r0`. No gateway
-listener or GraphQL product behavior exists; no gate is accepted and no
-benchmark claim is earned. GitHub branch-protection application is blocked
-by the current account tier and is recorded under `docs/evidence/r0/`.
+checks/workflow scaffolding are in progress on `gate/r0`. No gateway listener
+or GraphQL product behavior exists on this gate branch; no gate is accepted
+and no benchmark claim is earned. The owner-authorized early publication,
+successful branch-protection read-back, and immediate publication audit are
+recorded under `docs/evidence/r0/` and ADR-0014. R0 still requires independent
+PR approval and a schedule-triggered nightly run.
 
 ### 2.2 The current honest product claim
 
