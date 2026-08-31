@@ -1,0 +1,31 @@
+{
+  "valid": [
+    "valid/simple.yaml",
+    "valid/full.yaml",
+    "valid/full-reordered.yaml"
+  ],
+  "invalid": [
+    {"file": "invalid/root-sequence.yaml", "rule": "binding.document.root_mapping"},
+    {"file": "invalid/root-unknown.yaml", "rule": "binding.document.root_key"},
+    {"file": "invalid/root-duplicate.yaml", "rule": "binding.document.root_duplicate"},
+    {"file": "invalid/bindings-missing.yaml", "rule": "binding.document.bindings_required"},
+    {"file": "invalid/bindings-scalar.yaml", "rule": "binding.document.bindings_sequence"},
+    {"file": "invalid/entry-scalar.yaml", "rule": "binding.entry.mapping"},
+    {"file": "invalid/entry-unknown-key.yaml", "rule": "binding.entry.key"},
+    {"file": "invalid/entry-duplicate-key.yaml", "rule": "binding.entry.duplicate_key"},
+    {"file": "invalid/field-missing.yaml", "rule": "binding.entry.field_required"},
+    {"file": "invalid/field-type.yaml", "rule": "binding.entry.field_string"},
+    {"file": "invalid/field-coordinate.yaml", "rule": "binding.entry.field_coordinate"},
+    {"file": "invalid/target-both.yaml", "rule": "binding.entry.target_exclusive"},
+    {"file": "invalid/target-missing.yaml", "rule": "binding.entry.target_required"},
+    {"file": "invalid/source-type.yaml", "rule": "binding.entry.source_string"},
+    {"file": "invalid/source-empty.yaml", "rule": "binding.entry.source_nonempty"},
+    {"file": "invalid/parent-type.yaml", "rule": "binding.entry.parent_sequence"},
+    {"file": "invalid/parent-segment-type.yaml", "rule": "binding.entry.parent_segment_string"},
+    {"file": "invalid/parent-segment-empty.yaml", "rule": "binding.entry.parent_segment_nonempty"},
+    {"file": "invalid/duplicate-field.yaml", "rule": "binding.entry.duplicate_field"},
+    {"file": "invalid/alias.yaml", "rule": "binding.document.alias"},
+    {"file": "invalid/multiple-documents.yaml", "rule": "binding.document.multiple_documents"},
+    {"file": "invalid/malformed.yaml", "rule": "binding.document.yaml"}
+  ]
+}

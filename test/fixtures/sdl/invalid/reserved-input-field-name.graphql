@@ -1,0 +1,2 @@
+input Filter { __private: String }
+type Query { value(filter: Filter): String }

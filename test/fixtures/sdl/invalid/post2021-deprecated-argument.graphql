@@ -1,0 +1,1 @@
+type Query { value(input: String @deprecated): String }

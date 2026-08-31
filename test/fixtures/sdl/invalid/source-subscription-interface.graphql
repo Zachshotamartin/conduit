@@ -1,0 +1,4 @@
+type Query { ok: Boolean }
+type Subscription { events: Event }
+interface Event { detail: String }
+type ConcreteEvent implements Event { detail: String @source(name: "db") }

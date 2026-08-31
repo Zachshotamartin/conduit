@@ -1,0 +1,3 @@
+schema { query: Query, subscription: SubscriptionRoot }
+type Query { ok: Boolean }
+interface SubscriptionRoot { event: String }

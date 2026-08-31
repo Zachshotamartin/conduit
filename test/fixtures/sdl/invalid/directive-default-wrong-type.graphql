@@ -1,0 +1,2 @@
+directive @tag(value: String = 1) on FIELD_DEFINITION
+type Query { ok: Boolean }

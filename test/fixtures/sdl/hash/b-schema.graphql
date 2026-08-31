@@ -1,0 +1,7 @@
+# Equivalent schema split through an extension and reordered.
+type Query { health: Boolean! }
+extend type Query {
+  viewer(first: Int!): Viewer
+    @complexity(multipliers: ["first"], cost: 2)
+    @source(name: "db")
+}

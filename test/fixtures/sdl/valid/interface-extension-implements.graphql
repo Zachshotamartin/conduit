@@ -1,0 +1,4 @@
+interface Parent { parent: String }
+interface Child { child: String }
+extend interface Child implements Parent { parent: String }
+type Query { node: Child }

@@ -1,0 +1,2 @@
+enum Status { null }
+type Query { status: Status }

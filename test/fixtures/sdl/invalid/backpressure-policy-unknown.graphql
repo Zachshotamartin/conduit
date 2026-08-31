@@ -1,0 +1,2 @@
+type Query { ok: Boolean }
+type Subscription { events: String @backpressure(policy: KEEP_NEWEST) }

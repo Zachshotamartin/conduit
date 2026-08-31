@@ -1,0 +1,2 @@
+enum Status { OPEN }
+type Query { value(status: Status = CLOSED): String }

@@ -1,0 +1,1 @@
+type Query { search(term: String @filterable): String }

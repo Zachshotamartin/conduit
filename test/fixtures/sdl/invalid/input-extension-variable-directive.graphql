@@ -1,0 +1,5 @@
+input Nested { value: String }
+directive @tag(value: Nested!) on INPUT_OBJECT
+input Filter { base: String }
+extend input Filter @tag(value: {value: $variable}) { extra: String }
+type Query { value(filter: Filter): String }

@@ -1,0 +1,4 @@
+interface Node { id: ID! }
+type Item implements Node { id: ID! }
+extend type Item implements Node
+type Query { item: Item }

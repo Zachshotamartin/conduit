@@ -1,0 +1,2 @@
+schema { query: Root }
+scalar Root

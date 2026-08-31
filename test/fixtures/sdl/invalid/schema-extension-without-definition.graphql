@@ -1,0 +1,3 @@
+directive @tag on SCHEMA
+extend schema @tag
+type Query { ok: Boolean }

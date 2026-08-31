@@ -1,0 +1,3 @@
+type Query {
+  search(first: Int): String @complexity(multipliers: ["first", "first"])
+}

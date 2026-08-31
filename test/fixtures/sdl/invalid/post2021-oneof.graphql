@@ -1,0 +1,2 @@
+input Choice @oneOf { value: String }
+type Query { choose(input: Choice): String }

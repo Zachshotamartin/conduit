@@ -1,0 +1,2 @@
+scalar String
+type Query { ok: Boolean }

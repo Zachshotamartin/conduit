@@ -1,0 +1,3 @@
+input Filter { required: String! }
+directive @tag(filter: Filter!) on FIELD_DEFINITION
+type Query { ok: Boolean @tag(filter: {required: "yes", required: "again"}) }

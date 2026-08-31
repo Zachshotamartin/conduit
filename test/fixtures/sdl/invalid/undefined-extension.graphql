@@ -1,0 +1,2 @@
+type Query { ok: Boolean }
+extend type Ghost { value: String }

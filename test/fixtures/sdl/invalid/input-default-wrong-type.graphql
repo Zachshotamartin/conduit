@@ -1,0 +1,2 @@
+input Filter { text: String = 1 }
+type Query { value(filter: Filter): String }

@@ -1,0 +1,2 @@
+interface Empty
+type Query { value: Empty }

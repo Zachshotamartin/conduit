@@ -1,0 +1,3 @@
+scalar Target
+extend type Target { value: String }
+type Query { ok: Boolean }

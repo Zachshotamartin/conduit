@@ -1,0 +1,4 @@
+input Inner { values: [Int!]! }
+input Outer { inner: Inner! }
+directive @tag(value: Outer!) on FIELD_DEFINITION
+type Query { value: String @tag(value: {inner: {values: [1, "bad"]}}) }

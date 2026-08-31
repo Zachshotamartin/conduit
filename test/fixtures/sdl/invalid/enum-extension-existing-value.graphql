@@ -1,0 +1,3 @@
+enum Status { OPEN }
+extend enum Status { OPEN }
+type Query { status: Status }

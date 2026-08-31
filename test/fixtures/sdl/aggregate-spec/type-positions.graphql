@@ -1,0 +1,8 @@
+input WrongOutput { value: String }
+type WrongInput { value: String }
+union WrongUnion = String
+type Query {
+  outputFailure: WrongOutput
+  inputFailure(value: WrongInput): String
+  unionFailure: WrongUnion
+}

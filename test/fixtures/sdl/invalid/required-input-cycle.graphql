@@ -1,0 +1,3 @@
+input First { second: Second! }
+input Second { first: First! }
+type Query { value(input: First): String }

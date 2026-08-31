@@ -1,0 +1,2 @@
+union Empty
+type Query { value: Empty }

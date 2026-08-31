@@ -1,0 +1,3 @@
+scalar Timestamp
+type Query { ok: Boolean }
+type Subscription { base: String }

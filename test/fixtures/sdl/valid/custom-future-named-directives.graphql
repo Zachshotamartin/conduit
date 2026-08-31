@@ -1,0 +1,4 @@
+directive @defer on FIELD_DEFINITION
+directive @stream on FIELD_DEFINITION
+directive @oneOf on FIELD_DEFINITION
+type Query { first: String @defer, second: String @stream, third: String @oneOf }

@@ -1,0 +1,2 @@
+enum Status { __RESERVED }
+type Query { status: Status }

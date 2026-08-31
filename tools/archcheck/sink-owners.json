@@ -5,5 +5,7 @@
     "internal/graphql/executor",
     "internal/observability"
   ],
-  "owners": []
+  "owners": [
+    "internal/graphql/executor"
+  ]
 }

@@ -1,0 +1,3 @@
+interface Finder { find(id: ID!): String }
+type Item implements Finder { find: String }
+type Query { item: Item }

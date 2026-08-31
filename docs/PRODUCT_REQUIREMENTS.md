@@ -212,6 +212,27 @@ repository.
   queue: Int, coalesceKey: String)`: per-subscription-field overflow policy.
 - `@complexity(cost: Int, multipliers: [String!])`: complexity accounting.
 
+Complexity is calculated for the selected, spec-valid operation after
+variables, defaults, and `@skip`/`@include` are resolved. Every active
+syntactic field occurrence in every active fragment expansion is charged;
+repeated spreads, duplicate response keys, aliases, and all statically valid
+type-condition branches are charged separately. A field contributes its
+non-negative declared cost (default 1) multiplied by the product of every
+declared multiplier on that field and its field ancestors; that product also
+scales descendants. Multiplier names are unique argument names on the same
+field and must reference built-in `Int`/`Int!`; effective values include
+operation and schema defaults and must be present, non-null, and non-negative
+(zero is allowed), otherwise the request is invalid. Lists have no implicit
+multiplier. Depth is the maximum number of active field occurrences on a
+root-to-leaf path, with the root field at 1 and fragment, inline-fragment,
+type-condition, list, and non-null wrappers transparent. Fragment cycles fail
+spec validation. Limits are `limits.max_query_depth` (default 15) and
+`limits.max_query_complexity` (default 10,000); equality is accepted. Depth is
+checked before cost. Depth rejection uses `extensions.code = invalid_request`
+and integer `depth`/`max_depth`; cost rejection uses
+`extensions.code = complexity_exceeded` and exact base-10 string
+`cost`/`max_cost` values.
+
 ### 5.3 Configuration and CLI
 
 One executable `conduit` with subcommands: `conduit serve`,

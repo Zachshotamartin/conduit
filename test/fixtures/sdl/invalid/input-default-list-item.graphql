@@ -1,0 +1,2 @@
+input Filter { values: [Boolean!] = [true, 1] }
+type Query { value(filter: Filter): String }

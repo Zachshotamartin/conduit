@@ -1,0 +1,4 @@
+type Item { id: ID! }
+union Result = Item
+extend union Result = String
+type Query { result: Result }

@@ -1,0 +1,16 @@
+type Query {
+  order(first: Int!): Order
+    @source(name: "db")
+    @auth(rule: "allow")
+    @complexity(cost: 2, multipliers: ["first"])
+}
+
+type Subscription {
+  orderUpdated(region: String! @filterable): Order
+    @auth(rule: "same-tenant-only")
+    @backpressure(policy: COALESCE_BY_KEY, queue: 4, coalesceKey: "id")
+}
+
+type Order {
+  id: ID!
+}

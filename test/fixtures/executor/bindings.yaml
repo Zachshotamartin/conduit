@@ -1,0 +1,53 @@
+bindings:
+  - field: Query.user
+    source: fixture
+  - field: Query.users
+    source: fixture
+  - field: Query.nullableUsers
+    source: fixture
+  - field: Query.node
+    source: fixture
+  - field: Query.hit
+    source: fixture
+  - field: Query.echo
+    source: fixture
+  - field: Query.search
+    source: fixture
+  - field: Query.matrix
+    source: fixture
+  - field: Mutation.first
+    source: fixture
+  - field: Mutation.second
+    source: fixture
+  - field: Mutation.third
+    source: fixture
+  - field: Node.id
+    parent: [id]
+  - field: User.id
+    parent: [id]
+  - field: User.name
+    parent: [name]
+  - field: User.nickname
+    parent: [nickname]
+  - field: User.tags
+    parent: [tags]
+  - field: User.friend
+    parent: [friend]
+  - field: User.profile
+    parent: [profile]
+  - field: User.role
+    parent: [role]
+  - field: User.score
+    parent: [score]
+  - field: User.active
+    parent: [active]
+  - field: Profile.city
+    parent: [city]
+  - field: Profile.zip
+    parent: [zip]
+  - field: Echo.text
+    parent: [text]
+  - field: Echo.count
+    parent: [count]
+  - field: Echo.flags
+    parent: [flags]

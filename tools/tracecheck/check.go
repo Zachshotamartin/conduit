@@ -194,12 +194,12 @@ func Check(ctx context.Context, options CheckOptions) ([]Violation, error) {
 		}
 	}
 
-	highestStarted, highestAccepted := gateFrontiers(statuses)
+	_, highestAccepted := gateFrontiers(statuses)
 	for _, row := range rows {
-		if row.EarliestGate <= highestStarted && !tests.Rows[row.ID] {
+		if row.EarliestGate <= highestAccepted && !tests.Rows[row.ID] {
 			violations = append(violations, Violation{
 				Kind: "missing-test-row", Reference: row.ID, Path: options.OperationsTestPlanPath,
-				Message: fmt.Sprintf("earliest gate R%d has started but no Test%s function exists", row.EarliestGate, strings.ReplaceAll(row.ID, "-", "")),
+				Message: fmt.Sprintf("earliest gate R%d is accepted but no Test%s function exists", row.EarliestGate, strings.ReplaceAll(row.ID, "-", "")),
 			})
 		}
 		if tests.Rows[row.ID] {

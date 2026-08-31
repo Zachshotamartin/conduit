@@ -1,0 +1,2 @@
+type Item implements Missing { id: ID! }
+type Query { item: Item }

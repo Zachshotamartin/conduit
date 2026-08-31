@@ -1,0 +1,3 @@
+bindings:
+  - field: 42
+    source: users

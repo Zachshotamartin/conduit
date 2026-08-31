@@ -1,0 +1,5 @@
+directive @tag on INTERFACE
+interface Node @tag { id: ID! }
+extend interface Node @tag
+type Item implements Node { id: ID! }
+type Query { item: Item }

@@ -1,0 +1,3 @@
+type Result { value: String }
+input Filter { invalid: Result }
+type Query { value(filter: Filter): String }

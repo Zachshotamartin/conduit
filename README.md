@@ -7,11 +7,12 @@ authorization, bounded backpressure, and honest resume semantics.
 
 ## Implementation status — read this first
 
-**No product capability is built.** Gate R0 repository infrastructure is
-`in progress` on a working branch: the toolchain, deterministic test
-foundations, checks, and workflow contracts exist, but no gateway listener
-or GraphQL behavior exists and no gate has been accepted. The honest product
-claim remains:
+**No product capability is complete.** Gate R0 repository infrastructure is
+`in progress`; R1 is provisionally `in progress` on a stacked working branch
+under ADR-0013. The toolchain, deterministic test foundations, checks, and
+workflow contracts exist, but no gateway listener or completed GraphQL
+behavior exists and no gate has been accepted. The honest product claim
+remains:
 
 > Conduit is a fully specified, unimplemented design for a
 > subscription-first GraphQL gateway. Nothing runs. No performance, scale,
@@ -19,8 +20,8 @@ claim remains:
 
 The build is gated R0–R10; a capability may be claimed only when its gate's
 automated evidence passes. The gate table and the current status of every
-gate live in [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) §1.2 (R0:
-`in progress`; R1–R10: `planned`).
+gate live in [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) §1.2 (R0 and provisional
+R1: `in progress`; R2–R10: `planned`).
 
 ## What Conduit will be, when its gates pass
 

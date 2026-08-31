@@ -1,0 +1,2 @@
+input Filter { value: String! = null }
+type Query { value(filter: Filter): String }

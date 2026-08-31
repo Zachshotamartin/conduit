@@ -1,0 +1,3 @@
+interface First implements Second { id: ID! }
+interface Second implements First { id: ID! }
+type Query { node: First }

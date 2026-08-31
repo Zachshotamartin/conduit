@@ -1,0 +1,23 @@
+bindings:
+  - field: Query.viewer
+    source: users
+  - field: Query.search
+    source: analytics
+  - field: Mutation.rename
+    source: users
+  - field: Subscription.userChanged
+    parent: []
+  - field: Node.id
+    parent: [id]
+  - field: User.id
+    parent: [id]
+  - field: User.profile
+    parent: [profile]
+  - field: Team.id
+    parent: [id]
+  - field: Team.name
+    parent: [name]
+  - field: Profile.displayName
+    parent: [display_name]
+  - field: Orphan.value
+    parent: [value]
