@@ -1,0 +1,2 @@
+schema { mutation: Mutation }
+type Mutation { update: Boolean }

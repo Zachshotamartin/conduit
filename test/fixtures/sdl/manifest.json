@@ -53,6 +53,7 @@
     {"file":"invalid/complexity-multiplier-unknown.graphql","rule":"conduit.complexity.multiplier_argument"},
     {"file":"invalid/complexity-multiplier-non-int.graphql","rule":"conduit.complexity.multiplier_type"},
     {"file":"invalid/root-missing.graphql","rule":"graphql.sdl.root_known_type"},
+    {"file":"invalid/root-query-required.graphql","rule":"graphql.sdl.query_root_required"},
     {"file":"invalid/root-non-object.graphql","rule":"graphql.sdl.root_object"},
     {"file":"invalid/root-not-distinct.graphql","rule":"graphql.sdl.root_distinct"},
     {"file":"invalid/required-input-cycle.graphql","rule":"graphql.sdl.input_cycle"},

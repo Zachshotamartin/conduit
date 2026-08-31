@@ -1,6 +1,7 @@
 package schema_test
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,6 +11,46 @@ import (
 	graphqlast "github.com/Zachshotamartin/conduit/internal/graphql/ast"
 	graphqlschema "github.com/Zachshotamartin/conduit/internal/graphql/schema"
 )
+
+func TestUNIT002_OperatorSDLRetainsFullFourMiBBudget(t *testing.T) {
+	const max = 4 << 20
+	base := []byte("type Query { ok: Boolean }\n")
+	atBound := append(append([]byte(nil), base...), bytes.Repeat([]byte(" "), max-len(base))...)
+	over := append(append([]byte(nil), atBound...), ' ')
+
+	t.Run("sources", func(t *testing.T) {
+		loaded, err := graphqlschema.LoadSources([]graphqlast.SchemaSource{{
+			Name: "schema.graphql", Input: atBound,
+		}}, schemaOptions)
+		if err != nil || loaded == nil {
+			t.Fatalf("LoadSources(at bound) = (%v, %v), want schema", loaded, err)
+		}
+		loaded, err = graphqlschema.LoadSources([]graphqlast.SchemaSource{{
+			Name: "schema.graphql", Input: over,
+		}}, schemaOptions)
+		assertOnlyRule(t, loaded, err, "sdl.limit.bytes")
+	})
+
+	t.Run("files", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "schema.graphql")
+		if err := os.WriteFile(path, atBound, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		loaded, err := graphqlschema.LoadFiles([]graphqlschema.File{{
+			Path: path, Name: "schema.graphql",
+		}}, schemaOptions)
+		if err != nil || loaded == nil {
+			t.Fatalf("LoadFiles(at bound) = (%v, %v), want schema", loaded, err)
+		}
+		if err := os.WriteFile(path, over, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		loaded, err = graphqlschema.LoadFiles([]graphqlschema.File{{
+			Path: path, Name: "schema.graphql",
+		}}, schemaOptions)
+		assertOnlyRule(t, loaded, err, "sdl.limit.bytes")
+	})
+}
 
 func TestUNIT002_AccumulatesTypePositionRulesBeforeCompilerGuard(t *testing.T) {
 	t.Parallel()
@@ -221,4 +262,15 @@ func typeRefString(reference graphqlast.TypeRef) string {
 		return "[" + typeRefString(*reference.Element) + "]" + suffix
 	}
 	return reference.Named + suffix
+}
+
+func assertOnlyRule(t *testing.T, schema *graphqlschema.Schema, err error, rule string) {
+	t.Helper()
+	if schema != nil {
+		t.Fatal("load returned partial schema")
+	}
+	items := diagnosticsFrom(t, err).Items()
+	if len(items) != 1 || items[0].Rule != rule {
+		t.Fatalf("diagnostics = %#v, want only %s", items, rule)
+	}
 }
