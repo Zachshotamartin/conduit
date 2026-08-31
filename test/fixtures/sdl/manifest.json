@@ -49,6 +49,7 @@
     {"file":"invalid/complexity-cost-negative.graphql","rule":"conduit.complexity.cost_nonnegative"},
     {"file":"invalid/complexity-multiplier-empty.graphql","rule":"conduit.complexity.multiplier_nonempty"},
     {"file":"invalid/complexity-multiplier-duplicate.graphql","rule":"conduit.complexity.multiplier_unique"},
-    {"file":"invalid/complexity-multiplier-unknown.graphql","rule":"conduit.complexity.multiplier_argument"}
+    {"file":"invalid/complexity-multiplier-unknown.graphql","rule":"conduit.complexity.multiplier_argument"},
+    {"file":"invalid/complexity-multiplier-non-int.graphql","rule":"conduit.complexity.multiplier_type"}
   ]
 }

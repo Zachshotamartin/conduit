@@ -232,13 +232,13 @@ func TestUNIT002_ServingMetadataIsImmutableAndComplete(t *testing.T) {
 	if !field.HasAuth || field.AuthRule != "allow" {
 		t.Fatalf("Query.order auth = (%v, %q), want (true, allow)", field.HasAuth, field.AuthRule)
 	}
-	if field.Complexity.Cost != 2 || !reflect.DeepEqual(field.Complexity.Multipliers, []string{"id"}) {
+	if field.Complexity.Cost != 2 || !reflect.DeepEqual(field.Complexity.Multipliers, []string{"first"}) {
 		t.Fatalf("Query.order complexity = %#v", field.Complexity)
 	}
 
 	field.Complexity.Multipliers[0] = "mutated"
 	again, _ := loaded.Field("Query", "order")
-	if got := again.Complexity.Multipliers[0]; got != "id" {
+	if got := again.Complexity.Multipliers[0]; got != "first" {
 		t.Fatalf("metadata mutation escaped into schema: %q", got)
 	}
 	input[0] = 'X'

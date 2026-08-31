@@ -1,8 +1,8 @@
 type Query {
-  order(id: ID!): Order
+  order(first: Int!): Order
     @source(name: "db")
     @auth(rule: "allow")
-    @complexity(cost: 2, multipliers: ["id"])
+    @complexity(cost: 2, multipliers: ["first"])
 }
 
 type Subscription {

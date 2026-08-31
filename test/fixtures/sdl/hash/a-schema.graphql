@@ -1,4 +1,4 @@
 type Query {
   health: Boolean!
-  viewer(id: ID!): Viewer @source(name: "db") @complexity(cost: 2, multipliers: ["id"])
+  viewer(first: Int!): Viewer @source(name: "db") @complexity(cost: 2, multipliers: ["first"])
 }
