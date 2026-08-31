@@ -8,6 +8,7 @@ import (
 	conduiterrors "github.com/Zachshotamartin/conduit/internal/errors"
 	graphqlast "github.com/Zachshotamartin/conduit/internal/graphql/ast"
 	"github.com/Zachshotamartin/conduit/internal/graphql/binding"
+	"github.com/Zachshotamartin/conduit/internal/graphql/complexity"
 	graphqlschema "github.com/Zachshotamartin/conduit/internal/graphql/schema"
 )
 
@@ -19,6 +20,8 @@ type Config struct {
 	Bindings             *binding.Table
 	Sources              []datasource.DataSource
 	MaxSourceConcurrency int
+	MaxQueryDepth        int
+	MaxQueryComplexity   int64
 }
 
 // Request is one already-intaken operation with narrowed identity and timing
@@ -35,17 +38,28 @@ type Request struct {
 // Error is a structured GraphQL execution failure. R1.06 extends its wire
 // formatting; the category and path are stable from the executor boundary.
 type Error struct {
-	Message string
-	Path    []any
-	Code    conduiterrors.Category
+	Message  string
+	Path     []any
+	Code     conduiterrors.Category
+	depth    *int
+	maxDepth *int
+	cost     string
+	maxCost  string
 }
 
 // MarshalJSON emits the spec-sanctioned error surface in deterministic key
 // order.
 func (failure Error) MarshalJSON() ([]byte, error) {
 	extensions := struct {
-		Code conduiterrors.Category `json:"code"`
-	}{Code: failure.Code}
+		Code     conduiterrors.Category `json:"code"`
+		Depth    *int                   `json:"depth,omitempty"`
+		MaxDepth *int                   `json:"max_depth,omitempty"`
+		Cost     string                 `json:"cost,omitempty"`
+		MaxCost  string                 `json:"max_cost,omitempty"`
+	}{
+		Code: failure.Code, Depth: failure.depth, MaxDepth: failure.maxDepth,
+		Cost: failure.cost, MaxCost: failure.maxCost,
+	}
 	payload := struct {
 		Message    string `json:"message"`
 		Path       []any  `json:"path,omitempty"`
@@ -91,4 +105,5 @@ type Executor struct {
 	bindings *binding.Table
 	sources  map[string]sourceRuntime
 	index    schemaIndex
+	limits   complexity.Limits
 }

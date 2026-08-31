@@ -6,6 +6,7 @@ import (
 
 	conduiterrors "github.com/Zachshotamartin/conduit/internal/errors"
 	graphqlast "github.com/Zachshotamartin/conduit/internal/graphql/ast"
+	"github.com/Zachshotamartin/conduit/internal/graphql/complexity"
 )
 
 // New validates a complete schema generation and constructs an immutable
@@ -26,6 +27,12 @@ func New(config Config) (*Executor, error) {
 	}
 	if concurrency < 1 {
 		return nil, invalidConfiguration("source concurrency must be positive")
+	}
+	limits, err := (complexity.Limits{
+		MaxDepth: config.MaxQueryDepth, MaxCost: config.MaxQueryComplexity,
+	}).Resolve()
+	if err != nil {
+		return nil, invalidConfiguration(err.Error())
 	}
 
 	sources := make(map[string]sourceRuntime, len(config.Sources))
@@ -61,7 +68,7 @@ func New(config Config) (*Executor, error) {
 		}
 	}
 	return &Executor{
-		schema: config.Schema, bindings: config.Bindings, sources: sources, index: index,
+		schema: config.Schema, bindings: config.Bindings, sources: sources, index: index, limits: limits,
 	}, nil
 }
 

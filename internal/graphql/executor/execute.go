@@ -10,6 +10,7 @@ import (
 	conduiterrors "github.com/Zachshotamartin/conduit/internal/errors"
 	graphqlast "github.com/Zachshotamartin/conduit/internal/graphql/ast"
 	"github.com/Zachshotamartin/conduit/internal/graphql/binding"
+	"github.com/Zachshotamartin/conduit/internal/graphql/complexity"
 )
 
 type executionState struct {
@@ -43,6 +44,18 @@ func (executor *Executor) Execute(ctx context.Context, request Request) Result {
 	variables, err := executor.coerceVariables(request.Variables, operation.Variables)
 	if err != nil {
 		return requestFailure()
+	}
+	assessment, err := complexity.Check(
+		executor.schema, operation, snapshot.Fragments, variables, executor.limits,
+	)
+	if err != nil {
+		return requestFailure()
+	}
+	switch assessment.Exceeded {
+	case complexity.DepthLimit:
+		return depthLimitFailure(assessment.Depth, assessment.MaxDepth)
+	case complexity.CostLimit:
+		return costLimitFailure(assessment.Cost, assessment.MaxCost)
 	}
 	fragments := make(map[string]graphqlast.ExecutableFragment, len(snapshot.Fragments))
 	for _, fragment := range snapshot.Fragments {
@@ -284,6 +297,20 @@ func requestFailure() Result {
 	return Result{
 		Data: jsonNull(), Errors: []Error{newExecutionError(conduiterrors.InvalidRequest, nil)},
 	}
+}
+
+func depthLimitFailure(depth, maximum int) Result {
+	failure := newExecutionError(conduiterrors.InvalidRequest, nil)
+	failure.depth = &depth
+	failure.maxDepth = &maximum
+	return Result{Data: jsonNull(), Errors: []Error{failure}}
+}
+
+func costLimitFailure(cost, maximum string) Result {
+	failure := newExecutionError(conduiterrors.ComplexityExceeded, nil)
+	failure.cost = cost
+	failure.maxCost = maximum
+	return Result{Data: jsonNull(), Errors: []Error{failure}}
 }
 
 func jsonNull() []byte { return []byte("null") }
