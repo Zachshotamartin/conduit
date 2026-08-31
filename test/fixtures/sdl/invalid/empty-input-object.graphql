@@ -1,0 +1,2 @@
+input Empty
+type Query { value(input: Empty): String }

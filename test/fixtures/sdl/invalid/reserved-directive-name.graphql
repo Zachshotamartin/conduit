@@ -1,0 +1,2 @@
+directive @__private on FIELD_DEFINITION
+type Query { value: String }

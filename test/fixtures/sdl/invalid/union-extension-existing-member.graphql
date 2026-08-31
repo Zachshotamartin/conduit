@@ -1,0 +1,4 @@
+type Item { id: ID! }
+union Result = Item
+extend union Result = Item
+type Query { result: Result }

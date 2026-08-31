@@ -1,0 +1,3 @@
+type Item { id: ID! }
+union Result = Item | Item
+type Query { result: Result }

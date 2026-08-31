@@ -1,0 +1,5 @@
+interface Parent { id: ID! }
+interface Child implements Parent { id: ID! }
+extend interface Child implements Parent
+type Item implements Child & Parent { id: ID! }
+type Query { item: Item }

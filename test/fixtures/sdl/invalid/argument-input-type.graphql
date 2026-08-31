@@ -1,0 +1,2 @@
+type Result { value: String }
+type Query { invalid(value: Result): String }

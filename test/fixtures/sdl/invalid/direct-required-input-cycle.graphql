@@ -1,0 +1,2 @@
+input Loop { self: Loop! }
+type Query { value(input: Loop): String }

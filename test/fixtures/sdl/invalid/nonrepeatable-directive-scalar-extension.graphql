@@ -1,0 +1,4 @@
+directive @tag on SCALAR
+scalar Timestamp @tag
+extend scalar Timestamp @tag
+type Query { now: Timestamp }

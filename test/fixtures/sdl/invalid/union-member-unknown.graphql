@@ -1,0 +1,2 @@
+union Result = Missing
+type Query { result: Result }

@@ -1,0 +1,5 @@
+directive @tag on UNION
+type Item { id: ID! }
+union Result @tag = Item
+extend union Result @tag
+type Query { result: Result }

@@ -1,0 +1,4 @@
+interface Node { id: ID! }
+interface Resource implements Node { id: ID!, url: String }
+type Image implements Resource { id: ID!, url: String }
+type Query { image: Image }

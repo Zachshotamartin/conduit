@@ -1,0 +1,4 @@
+directive @tag on ENUM
+enum Status @tag { OPEN }
+extend enum Status @tag
+type Query { status: Status }

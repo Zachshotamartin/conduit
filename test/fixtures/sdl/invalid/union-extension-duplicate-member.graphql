@@ -1,0 +1,5 @@
+type First { id: ID! }
+type Second { id: ID! }
+union Result = First
+extend union Result = Second | Second
+type Query { result: Result }

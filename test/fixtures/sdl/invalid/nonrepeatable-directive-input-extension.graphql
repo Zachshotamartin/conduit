@@ -1,0 +1,4 @@
+directive @tag on INPUT_OBJECT
+input Filter @tag { value: String }
+extend input Filter @tag
+type Query { value(filter: Filter): String }

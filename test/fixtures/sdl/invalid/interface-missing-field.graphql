@@ -1,0 +1,3 @@
+interface Node { id: ID! }
+type Item implements Node { value: String }
+type Query { item: Item }
