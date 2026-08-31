@@ -298,6 +298,7 @@ func TestUNIT006_OperationSnapshotIsResolvedVendorFreeAndDefensive(t *testing.T)
 	schema, err := graphqlast.LoadSchema([]graphqlast.SchemaSource{{
 		Name: "schema.graphql",
 		Input: []byte(`
+			directive @op(flag: Boolean!) on QUERY
 			input Filter { tag: String = "default" }
 			interface Node { id: ID! }
 			type User implements Node { id: ID!, name: String! }
@@ -312,7 +313,7 @@ func TestUNIT006_OperationSnapshotIsResolvedVendorFreeAndDefensive(t *testing.T)
 			$id: ID! = "u1",
 			$show: Boolean! = true,
 			$filter: Filter = {tag: "chosen"}
-		) @skip(if: false) {
+		) @op(flag: true) {
 			alias: node(id: $id, filter: $filter) @include(if: $show) {
 				__typename
 				...NodeFields @skip(if: false)
@@ -338,7 +339,7 @@ func TestUNIT006_OperationSnapshotIsResolvedVendorFreeAndDefensive(t *testing.T)
 		definition.Variables[0].DefaultValue.Kind != graphqlast.ValueString {
 		t.Fatalf("id variable = %#v", definition.Variables[0])
 	}
-	if len(definition.Directives) != 1 || definition.Directives[0].Name != "skip" {
+	if len(definition.Directives) != 1 || definition.Directives[0].Name != "op" {
 		t.Fatalf("operation directives = %#v", definition.Directives)
 	}
 	if len(definition.SelectionSet) != 1 || definition.SelectionSet[0].Kind != graphqlast.SelectionField {
