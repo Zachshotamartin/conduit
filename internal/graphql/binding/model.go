@@ -2,6 +2,7 @@ package binding
 
 import (
 	"encoding/hex"
+	"sort"
 
 	"github.com/Zachshotamartin/conduit/internal/datasource"
 	graphqlast "github.com/Zachshotamartin/conduit/internal/graphql/ast"
@@ -92,6 +93,26 @@ func (table *Table) Lookup(field datasource.FieldRef) (Binding, bool) {
 	}
 	entry.ParentPath = cloneParentPath(entry.ParentPath)
 	return entry, true
+}
+
+// SourceNames returns the sorted unique adapter names referenced by this
+// complete table.
+func (table *Table) SourceNames() []string {
+	if table == nil {
+		return nil
+	}
+	set := make(map[string]struct{})
+	for _, entry := range table.entries {
+		if entry.Kind == Source {
+			set[entry.SourceName] = struct{}{}
+		}
+	}
+	names := make([]string, 0, len(set))
+	for name := range set {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func cloneParentPath(path []string) []string {
