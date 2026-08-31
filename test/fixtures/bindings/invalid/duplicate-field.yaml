@@ -1,0 +1,5 @@
+bindings:
+  - field: Query.ok
+    source: users
+  - field: Query.ok
+    source: users

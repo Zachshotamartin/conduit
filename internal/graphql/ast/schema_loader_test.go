@@ -172,6 +172,32 @@ func TestUNIT002_SchemaSnapshotIsVendorFreeAndDefensive(t *testing.T) {
 	}
 }
 
+func TestUNIT005_DiagnosticsOwnAndRenderRelatedLocations(t *testing.T) {
+	t.Parallel()
+	related := []graphqlast.RelatedLocation{{
+		File: "bindings.yaml", Line: 3, Column: 5, Message: "binding declared here",
+	}}
+	diagnostics := graphqlast.NewDiagnostics(graphqlast.Diagnostic{
+		Rule: "binding.schema.missing", File: "schema.graphql", Line: 2, Column: 3,
+		Message: "field has no binding", Related: related,
+	})
+	related[0].File = "mutated.yaml"
+	items := diagnostics.Items()
+	if len(items) != 1 || len(items[0].Related) != 1 || items[0].Related[0].File != "bindings.yaml" {
+		t.Fatalf("NewDiagnostics() retained caller-owned related locations: %#v", items)
+	}
+	items[0].Related[0].File = "mutated-again.yaml"
+	if got := diagnostics.Items()[0].Related[0].File; got != "bindings.yaml" {
+		t.Fatalf("Items() exposed related location state: %q", got)
+	}
+	rendered := diagnostics.Error()
+	for _, required := range []string{"schema.graphql:2:3", "bindings.yaml:3:5", "binding declared here"} {
+		if !strings.Contains(rendered, required) {
+			t.Fatalf("rendered diagnostics %q omit %q", rendered, required)
+		}
+	}
+}
+
 func TestUNIT002_SchemaValidatesOperationsAndRetainsAnchor(t *testing.T) {
 	t.Parallel()
 	schema, err := graphqlast.LoadSchema([]graphqlast.SchemaSource{{

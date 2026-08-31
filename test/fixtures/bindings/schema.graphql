@@ -1,0 +1,42 @@
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+interface Node {
+  id: ID!
+}
+
+type Query {
+  viewer: User @source(name: "users")
+  search: SearchResult! @source(name: "analytics")
+}
+
+type Mutation {
+  rename: User @source(name: "users")
+}
+
+type Subscription {
+  userChanged: User
+}
+
+type User implements Node {
+  id: ID!
+  profile: Profile!
+}
+
+type Team implements Node {
+  id: ID!
+  name: String!
+}
+
+type Profile {
+  displayName: String!
+}
+
+type Orphan {
+  value: String!
+}
+
+union SearchResult = User | Team

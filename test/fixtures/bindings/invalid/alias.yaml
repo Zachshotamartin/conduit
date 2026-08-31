@@ -1,0 +1,5 @@
+template: &binding
+  field: Query.ok
+  source: users
+bindings:
+  - *binding

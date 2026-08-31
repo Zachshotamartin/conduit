@@ -1,0 +1,12 @@
+# Ordering and flow/block spelling do not affect the semantic table.
+bindings:
+  - {parent: [name], field: Team.name}
+  - {field: Profile.displayName, parent: [display_name]}
+  - {source: users, field: Mutation.rename}
+  - {parent: [id], field: User.id}
+  - {field: Query.search, source: analytics}
+  - {parent: [profile], field: User.profile}
+  - {field: Node.id, parent: [id]}
+  - {parent: [], field: Subscription.userChanged}
+  - {field: Query.viewer, source: users}
+  - {field: Team.id, parent: [id]}
