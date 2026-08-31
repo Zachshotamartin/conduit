@@ -279,6 +279,87 @@ func TestUNIT006_SourceRequestIsNarrowedCanonicalAndDeadlineBound(t *testing.T) 
 	}
 }
 
+func TestUNIT007_ComplexityLimitsRejectBeforeSourceDispatch(t *testing.T) {
+	t.Parallel()
+	schema := loadSchema(t, `
+		type Query {
+			node(first: Int = 2): Node @source(name: "fixture") @complexity(cost: 2, multipliers: ["first"])
+			search(first: Int): Int @source(name: "fixture") @complexity(cost: 1, multipliers: ["first"])
+		}
+		type Node { value: Int @complexity(cost: 3) }
+	`)
+	table := loadBindings(t, schema, `bindings:
+  - field: Query.node
+    source: fixture
+  - field: Query.search
+    source: fixture
+  - field: Node.value
+    parent: [value]
+`)
+
+	tests := []struct {
+		name      string
+		document  string
+		depth     int
+		cost      int64
+		want      json.RawMessage
+		wantCalls int
+	}{
+		{
+			name: "depth over by one", document: `{ node { value } }`, depth: 1, cost: 10,
+			want: json.RawMessage(`{"data":null,"errors":[{"message":"invalid request","extensions":{"code":"invalid_request","depth":2,"max_depth":1}}]}`),
+		},
+		{
+			name: "cost over by one", document: `{ node { value } }`, depth: 2, cost: 9,
+			want: json.RawMessage(`{"data":null,"errors":[{"message":"operation complexity limit exceeded","extensions":{"code":"complexity_exceeded","cost":"10","max_cost":"9"}}]}`),
+		},
+		{
+			name: "equal limits execute", document: `{ node { value } }`, depth: 2, cost: 10,
+			want: json.RawMessage(`{"data":{"node":{"value":7}}}`), wantCalls: 1,
+		},
+		{
+			name: "invalid multiplier", document: `{ search }`, depth: 2, cost: 10,
+			want: json.RawMessage(`{"data":null,"errors":[{"message":"invalid request","extensions":{"code":"invalid_request"}}]}`),
+		},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			source := &corpusSource{
+				values:    map[string]json.RawMessage{"node": json.RawMessage(`{"value":7}`)},
+				responses: map[string]string{"Query.node": "node"},
+			}
+			runtime, err := executor.New(executor.Config{
+				Schema: schema, Bindings: table, Sources: []datasource.DataSource{source},
+				MaxQueryDepth: test.depth, MaxQueryComplexity: test.cost,
+			})
+			if err != nil {
+				t.Fatalf("New() error = %v", err)
+			}
+			operation, err := graphqlast.Intake(
+				[]byte(test.document), graphqlast.IntakeLimits{}, schema.Executable(),
+			)
+			if err != nil {
+				t.Fatalf("Intake() error = %v", err)
+			}
+			result := runtime.Execute(context.Background(), executor.Request{
+				Operation: operation, Tenant: testTenant(t), Principal: testPrincipal(t), Deadline: testDeadline(),
+			})
+			encoded, err := json.Marshal(result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(encoded, compactJSON(t, test.want)) {
+				t.Fatalf("response\n got: %s\nwant: %s", encoded, compactJSON(t, test.want))
+			}
+			if calls := len(source.Calls()); calls != test.wantCalls {
+				t.Fatalf("source calls = %d, want %d", calls, test.wantCalls)
+			}
+		})
+	}
+}
+
 func TestUNIT006_SourceJSONRejectsAmbiguousAndMalformedValues(t *testing.T) {
 	t.Parallel()
 	schema := loadSchema(t, `
