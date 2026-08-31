@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -186,11 +187,10 @@ func TestUNIT006_MutationsRemainSerialAndContinueAfterMiddleFailure(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	operation, err := graphqlast.Intake([]byte(`mutation Run {
-		first(value: "1")
-		second(value: "2")
-		third(value: "3")
-	}`), graphqlast.IntakeLimits{}, schema.Executable())
+	operation, err := graphqlast.Intake(
+		[]byte("mutation Run {\n  first(value: \"1\")\n  second(value: \"2\")\n  third(value: \"3\")\n}"),
+		graphqlast.IntakeLimits{}, schema.Executable(),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestUNIT006_MutationsRemainSerialAndContinueAfterMiddleFailure(t *testing.T
 	}
 	want := compactJSON(t, json.RawMessage(`{
 		"data":{"first":"one","second":null,"third":"three"},
-		"errors":[{"message":"data source unavailable","path":["second"],"extensions":{"code":"source_unavailable"}}]
+		"errors":[{"message":"data source unavailable","path":["second"],"locations":[{"line":3,"column":3}],"extensions":{"code":"source_unavailable"}}]
 	}`))
 	if !bytes.Equal(encoded, want) {
 		t.Fatalf("mutation response\n got: %s\nwant: %s", encoded, want)
@@ -307,11 +307,11 @@ func TestUNIT007_ComplexityLimitsRejectBeforeSourceDispatch(t *testing.T) {
 	}{
 		{
 			name: "depth over by one", document: `{ node { value } }`, depth: 1, cost: 10,
-			want: json.RawMessage(`{"data":null,"errors":[{"message":"invalid request","extensions":{"code":"invalid_request","depth":2,"max_depth":1}}]}`),
+			want: json.RawMessage(`{"data":null,"errors":[{"message":"invalid request","locations":[{"line":1,"column":1}],"extensions":{"code":"invalid_request","depth":2,"max_depth":1}}]}`),
 		},
 		{
 			name: "cost over by one", document: `{ node { value } }`, depth: 2, cost: 9,
-			want: json.RawMessage(`{"data":null,"errors":[{"message":"operation complexity limit exceeded","extensions":{"code":"complexity_exceeded","cost":"10","max_cost":"9"}}]}`),
+			want: json.RawMessage(`{"data":null,"errors":[{"message":"operation complexity limit exceeded","locations":[{"line":1,"column":1}],"extensions":{"code":"complexity_exceeded","cost":"10","max_cost":"9"}}]}`),
 		},
 		{
 			name: "equal limits execute", document: `{ node { value } }`, depth: 2, cost: 10,
@@ -319,7 +319,7 @@ func TestUNIT007_ComplexityLimitsRejectBeforeSourceDispatch(t *testing.T) {
 		},
 		{
 			name: "invalid multiplier", document: `{ search }`, depth: 2, cost: 10,
-			want: json.RawMessage(`{"data":null,"errors":[{"message":"invalid request","extensions":{"code":"invalid_request"}}]}`),
+			want: json.RawMessage(`{"data":null,"errors":[{"message":"invalid request","locations":[{"line":1,"column":1}],"extensions":{"code":"invalid_request"}}]}`),
 		},
 	}
 	for _, test := range tests {
@@ -436,7 +436,7 @@ func TestUNIT006_SourceTimeoutMidListIsPathScoped(t *testing.T) {
 	}
 	want := compactJSON(t, json.RawMessage(`{
 		"data":{"items":[{"id":"1","remote":"ok"},{"id":"2","remote":null}]},
-		"errors":[{"message":"data source timed out","path":["items",1,"remote"],"extensions":{"code":"source_timeout"}}]
+		"errors":[{"message":"data source timed out","path":["items",1,"remote"],"locations":[{"line":1,"column":14}],"extensions":{"code":"source_timeout"}}]
 	}`))
 	if !bytes.Equal(encoded, want) {
 		t.Fatalf("mid-list timeout response\n got: %s\nwant: %s", encoded, want)
@@ -451,13 +451,14 @@ func TestUNIT006_OperationSelectionAndVariableFailuresNeverCallSources(t *testin
 		document      string
 		operationName string
 		variables     json.RawMessage
+		wantLocation  bool
 	}{
 		{name: "ambiguous operation", document: `query A { user(id: "u1") { id } } query B { user(id: "u1") { id } }`},
 		{name: "unknown operation", document: `query A { user(id: "u1") { id } }`, operationName: "B"},
-		{name: "missing variable", document: `query($id: ID!) { user(id: $id) { id } }`, variables: json.RawMessage(`{}`)},
-		{name: "unknown variable", document: `query($id: ID!) { user(id: $id) { id } }`, variables: json.RawMessage(`{"id":"u1","extra":true}`)},
-		{name: "wrong variable type", document: `query($id: ID!) { user(id: $id) { id } }`, variables: json.RawMessage(`{"id":true}`)},
-		{name: "malformed variables", document: `query($id: ID!) { user(id: $id) { id } }`, variables: json.RawMessage(`{"id":"u1","id":"u2"}`)},
+		{name: "missing variable", document: `query($id: ID!) { user(id: $id) { id } }`, variables: json.RawMessage(`{}`), wantLocation: true},
+		{name: "unknown variable", document: `query($id: ID!) { user(id: $id) { id } }`, variables: json.RawMessage(`{"id":"u1","extra":true}`), wantLocation: true},
+		{name: "wrong variable type", document: `query($id: ID!) { user(id: $id) { id } }`, variables: json.RawMessage(`{"id":true}`), wantLocation: true},
+		{name: "malformed variables", document: `query($id: ID!) { user(id: $id) { id } }`, variables: json.RawMessage(`{"id":"u1","id":"u2"}`), wantLocation: true},
 	}
 	for _, tc := range tests {
 		tc := tc
@@ -482,7 +483,77 @@ func TestUNIT006_OperationSelectionAndVariableFailuresNeverCallSources(t *testin
 			if calls := source.Calls(); len(calls) != 0 {
 				t.Fatalf("invalid operation called source: %#v", calls)
 			}
+			if tc.wantLocation && len(result.Errors[0].Locations) == 0 {
+				t.Fatalf("variable rejection has no GraphQL location: %#v", result.Errors[0])
+			}
 		})
+	}
+}
+
+func TestUNIT006_ErrorFormattingRedactsEverySourceCause(t *testing.T) {
+	t.Parallel()
+	schema := loadSchema(t, `
+		type Query {
+			unavailable: String @source(name: "fixture")
+			timeout: String @source(name: "fixture")
+			invalid: String @source(name: "fixture")
+			unknown: String @source(name: "fixture")
+		}
+	`)
+	table := loadBindings(t, schema, `bindings:
+  - field: Query.unavailable
+    source: fixture
+  - field: Query.timeout
+    source: fixture
+  - field: Query.invalid
+    source: fixture
+  - field: Query.unknown
+    source: fixture
+`)
+	canaries := readErrorCanaries(t)
+	diagnostic := strings.Join(canaries, " | ")
+	source := &corpusSource{failures: map[string]error{
+		"Query.unavailable": conduiterrors.Wrap(conduiterrors.SourceUnavailable, stderrors.New(diagnostic)),
+		"Query.timeout":     fmt.Errorf("%s: %w", diagnostic, context.DeadlineExceeded),
+		"Query.invalid":     conduiterrors.Wrap(conduiterrors.SourceInvalidResponse, stderrors.New(diagnostic)),
+		"Query.unknown":     stderrors.New(diagnostic),
+	}}
+	runtime, err := executor.New(executor.Config{
+		Schema: schema, Bindings: table, Sources: []datasource.DataSource{source},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation, err := graphqlast.Intake(
+		[]byte("query {\n  unavailable\n  timeout\n  invalid\n  unknown\n}"),
+		graphqlast.IntakeLimits{}, schema.Executable(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := runtime.Execute(context.Background(), executor.Request{
+		Operation: operation, Tenant: testTenant(t), Principal: testPrincipal(t), Deadline: testDeadline(),
+	})
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := compactJSON(t, json.RawMessage(`{
+		"data":{"unavailable":null,"timeout":null,"invalid":null,"unknown":null},
+		"errors":[
+			{"message":"data source unavailable","path":["unavailable"],"locations":[{"line":2,"column":3}],"extensions":{"code":"source_unavailable"}},
+			{"message":"data source timed out","path":["timeout"],"locations":[{"line":3,"column":3}],"extensions":{"code":"source_timeout"}},
+			{"message":"data source returned an invalid response","path":["invalid"],"locations":[{"line":4,"column":3}],"extensions":{"code":"source_invalid_response"}},
+			{"message":"internal error","path":["unknown"],"locations":[{"line":5,"column":3}],"extensions":{"code":"internal_invariant"}}
+		]
+	}`))
+	if !bytes.Equal(encoded, want) {
+		t.Fatalf("formatted errors\n got: %s\nwant: %s", encoded, want)
+	}
+	for _, canary := range canaries {
+		if bytes.Contains(encoded, []byte(canary)) {
+			t.Errorf("error response leaked canary %q: %s", canary, encoded)
+		}
 	}
 }
 
@@ -609,6 +680,36 @@ func readCorpus(t *testing.T) executionCorpus {
 		t.Fatalf("decode execution corpus: %v", err)
 	}
 	return corpus
+}
+
+func readErrorCanaries(t *testing.T) []string {
+	t.Helper()
+	contents, err := os.ReadFile(filepath.Join("..", "..", "..", "test", "fixtures", "security", "error-canaries.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document struct {
+		Canaries []struct {
+			Name   string   `json:"name"`
+			Values []string `json:"values"`
+		} `json:"canaries"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(contents))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&document); err != nil {
+		t.Fatalf("decode error canaries: %v", err)
+	}
+	var values []string
+	for _, canary := range document.Canaries {
+		if canary.Name == "" || len(canary.Values) == 0 {
+			t.Fatalf("invalid error canary entry %#v", canary)
+		}
+		values = append(values, canary.Values...)
+	}
+	if len(values) < 10 {
+		t.Fatalf("error canary forms = %d, want at least 10", len(values))
+	}
+	return values
 }
 
 func compactJSON(t *testing.T, input json.RawMessage) []byte {

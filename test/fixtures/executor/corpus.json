@@ -588,7 +588,7 @@
       "responses": {"Query.user": "user_null_name"},
       "want": {
         "data":{"user":null},
-        "errors":[{"message":"data source returned an invalid response","path":["user","name"],"extensions":{"code":"source_invalid_response"}}]
+        "errors":[{"message":"data source returned an invalid response","path":["user","name"],"locations":[{"line":1,"column":23}],"extensions":{"code":"source_invalid_response"}}]
       }
     },
     {
@@ -598,7 +598,7 @@
       "responses": {"Query.nullableUsers": "nullable_users_bad"},
       "want": {
         "data":{"nullableUsers":[null]},
-        "errors":[{"message":"data source returned an invalid response","path":["nullableUsers",0,"name"],"extensions":{"code":"source_invalid_response"}}]
+        "errors":[{"message":"data source returned an invalid response","path":["nullableUsers",0,"name"],"locations":[{"line":1,"column":19}],"extensions":{"code":"source_invalid_response"}}]
       }
     },
     {
@@ -608,7 +608,7 @@
       "responses": {"Query.users": "users_bad"},
       "want": {
         "data":null,
-        "errors":[{"message":"data source returned an invalid response","path":["users",0,"name"],"extensions":{"code":"source_invalid_response"}}]
+        "errors":[{"message":"data source returned an invalid response","path":["users",0,"name"],"locations":[{"line":1,"column":11}],"extensions":{"code":"source_invalid_response"}}]
       }
     }
   ]

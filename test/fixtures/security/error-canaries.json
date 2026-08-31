@@ -1,0 +1,32 @@
+{
+  "canaries": [
+    {
+      "name": "raw-postgres-credential",
+      "values": [
+        "r1_canary_pg_raw_7f4b2a",
+        "cjFfY2FuYXJ5X3BnX3Jhd183ZjRiMmE=",
+        "r1_canary_pg_raw_7f4b2a%3A5432",
+        "r1_canary_pg_\\u0072aw_7f4b2a"
+      ]
+    },
+    {
+      "name": "jwt-and-api-key",
+      "values": [
+        "eyJhbGciOiJub25lIn0.r1_canary_payload_91ad.signature",
+        "conduit_api_r1_canary_4d813f",
+        "conduit_api_r1_canary%2F4d813f",
+        "conduit_api_r1_",
+        "canary_4d813f"
+      ]
+    },
+    {
+      "name": "operator-internals",
+      "values": [
+        "SELECT secret FROM tenant_keys WHERE token = 'r1_canary_sql_62ce'",
+        "10.1.2.3:5432",
+        "/srv/conduit/internal/graphql/executor/execute.go:217",
+        "goroutine 41 [running]"
+      ]
+    }
+  ]
+}

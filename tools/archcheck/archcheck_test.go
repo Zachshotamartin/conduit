@@ -196,8 +196,9 @@ func TestSinkOwnerInventoryIsExactAndFailsClosed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("checked-in inventory: %v", err)
 	}
-	if len(inventory.Owners) != 0 {
-		t.Fatalf("R0 sink-owner inventory = %v, want honestly empty", inventory.Owners)
+	wantOwners := []string{"internal/graphql/executor"}
+	if strings.Join(inventory.Owners, ",") != strings.Join(wantOwners, ",") {
+		t.Fatalf("sink-owner inventory = %v, want %v", inventory.Owners, wantOwners)
 	}
 	wantCandidates := []string{"internal/admin", "internal/graphql/executor", "internal/observability"}
 	if strings.Join(inventory.Candidates, ",") != strings.Join(wantCandidates, ",") {
