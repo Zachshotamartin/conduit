@@ -17,12 +17,13 @@ func (executor *Executor) completeValue(
 	value any,
 	selectionSet []graphqlast.ExecutableSelection,
 	path []any,
+	position graphqlast.SourcePosition,
 ) fieldResult {
 	if value == nil {
 		if reference.NonNull {
 			return fieldResult{
 				value:  nil,
-				errors: []Error{newExecutionError(conduiterrors.SourceInvalidResponse, path)},
+				errors: []Error{newExecutionError(conduiterrors.SourceInvalidResponse, path, position)},
 				bubble: true,
 			}
 		}
@@ -31,13 +32,13 @@ func (executor *Executor) completeValue(
 	if reference.Element != nil {
 		items, ok := value.([]any)
 		if !ok {
-			return invalidCompletedValue(reference, path)
+			return invalidCompletedValue(reference, path, position)
 		}
 		completed := make([]any, len(items))
 		var failures []Error
 		for index, item := range items {
 			result := executor.completeValue(
-				ctx, state, *reference.Element, item, selectionSet, appendPath(path, index),
+				ctx, state, *reference.Element, item, selectionSet, appendPath(path, index), position,
 			)
 			failures = append(failures, result.errors...)
 			if result.bubble {
@@ -51,14 +52,14 @@ func (executor *Executor) completeValue(
 	if isBuiltInScalar(reference.Named) {
 		completed, ok := completeScalar(reference.Named, value)
 		if !ok {
-			return invalidCompletedValue(reference, path)
+			return invalidCompletedValue(reference, path, position)
 		}
 		return fieldResult{value: completed}
 	}
 	definition, exists := executor.index.types[reference.Named]
 	if !exists {
 		return fieldResult{
-			value: nil, errors: []Error{newExecutionError(conduiterrors.InternalInvariant, path)},
+			value: nil, errors: []Error{newExecutionError(conduiterrors.InternalInvariant, path, position)},
 			bubble: reference.NonNull,
 		}
 	}
@@ -66,23 +67,23 @@ func (executor *Executor) completeValue(
 	case "SCALAR":
 		completed, ok := completeScalar(reference.Named, value)
 		if !ok {
-			return invalidCompletedValue(reference, path)
+			return invalidCompletedValue(reference, path, position)
 		}
 		return fieldResult{value: completed}
 	case "ENUM":
 		name, ok := value.(string)
 		if !ok || !enumContains(definition, name) {
-			return invalidCompletedValue(reference, path)
+			return invalidCompletedValue(reference, path, position)
 		}
 		return fieldResult{value: name}
 	case "OBJECT", "INTERFACE", "UNION":
 		object, ok := value.(map[string]any)
 		if !ok {
-			return invalidCompletedValue(reference, path)
+			return invalidCompletedValue(reference, path, position)
 		}
 		runtimeType, ok := executor.runtimeObjectType(definition, object)
 		if !ok {
-			return invalidCompletedValue(reference, path)
+			return invalidCompletedValue(reference, path, position)
 		}
 		completed, failures, bubble := executor.executeSelectionSet(
 			ctx, state, runtimeType, object, selectionSet, path, false,
@@ -92,14 +93,18 @@ func (executor *Executor) completeValue(
 		}
 		return fieldResult{value: completed, errors: failures}
 	default:
-		return invalidCompletedValue(reference, path)
+		return invalidCompletedValue(reference, path, position)
 	}
 }
 
-func invalidCompletedValue(reference graphqlast.TypeRef, path []any) fieldResult {
+func invalidCompletedValue(
+	reference graphqlast.TypeRef,
+	path []any,
+	position graphqlast.SourcePosition,
+) fieldResult {
 	return fieldResult{
 		value:  nil,
-		errors: []Error{newExecutionError(conduiterrors.SourceInvalidResponse, path)},
+		errors: []Error{newExecutionError(conduiterrors.SourceInvalidResponse, path, position)},
 		bubble: reference.NonNull,
 	}
 }

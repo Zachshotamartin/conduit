@@ -35,16 +35,22 @@ type Request struct {
 	Deadline      time.Time
 }
 
-// Error is a structured GraphQL execution failure. R1.06 extends its wire
-// formatting; the category and path are stable from the executor boundary.
+// Location is one one-based source coordinate in the admitted operation.
+type Location struct {
+	Line   int `json:"line"`
+	Column int `json:"column"`
+}
+
+// Error is a structured, client-safe GraphQL execution failure.
 type Error struct {
-	Message  string
-	Path     []any
-	Code     conduiterrors.Category
-	depth    *int
-	maxDepth *int
-	cost     string
-	maxCost  string
+	Message   string
+	Path      []any
+	Locations []Location
+	Code      conduiterrors.Category
+	depth     *int
+	maxDepth  *int
+	cost      string
+	maxCost   string
 }
 
 // MarshalJSON emits the spec-sanctioned error surface in deterministic key
@@ -61,10 +67,14 @@ func (failure Error) MarshalJSON() ([]byte, error) {
 		Cost: failure.cost, MaxCost: failure.maxCost,
 	}
 	payload := struct {
-		Message    string `json:"message"`
-		Path       []any  `json:"path,omitempty"`
-		Extensions any    `json:"extensions"`
-	}{Message: failure.Message, Path: failure.Path, Extensions: extensions}
+		Message    string     `json:"message"`
+		Path       []any      `json:"path,omitempty"`
+		Locations  []Location `json:"locations,omitempty"`
+		Extensions any        `json:"extensions"`
+	}{
+		Message: failure.Message, Path: failure.Path,
+		Locations: failure.Locations, Extensions: extensions,
+	}
 	return json.Marshal(payload)
 }
 

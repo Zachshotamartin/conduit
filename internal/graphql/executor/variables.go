@@ -15,19 +15,19 @@ import (
 func (executor *Executor) coerceVariables(
 	raw json.RawMessage,
 	definitions []graphqlast.VariableDefinition,
-) (map[string]any, error) {
+) (map[string]any, graphqlast.SourcePosition, error) {
 	if len(bytes.TrimSpace(raw)) == 0 {
 		raw = json.RawMessage("{}")
 	}
 	canonical, err := datasource.NewArgumentValues(raw)
 	if err != nil {
-		return nil, fmt.Errorf("variables must be one strict JSON object: %w", err)
+		return nil, graphqlast.SourcePosition{}, fmt.Errorf("variables must be one strict JSON object: %w", err)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(canonical.CanonicalJSON()))
 	decoder.UseNumber()
 	provided := make(map[string]any)
 	if err := decoder.Decode(&provided); err != nil {
-		return nil, fmt.Errorf("decode variables: %w", err)
+		return nil, graphqlast.SourcePosition{}, fmt.Errorf("decode variables: %w", err)
 	}
 
 	definitionByName := make(map[string]graphqlast.VariableDefinition, len(definitions))
@@ -42,7 +42,7 @@ func (executor *Executor) coerceVariables(
 	}
 	if len(unknown) > 0 {
 		sort.Strings(unknown)
-		return nil, fmt.Errorf("unknown variable $%s", unknown[0])
+		return nil, graphqlast.SourcePosition{}, fmt.Errorf("unknown variable $%s", unknown[0])
 	}
 
 	coerced := make(map[string]any, len(definitions))
@@ -51,18 +51,18 @@ func (executor *Executor) coerceVariables(
 		if !present && definition.DefaultValue != nil {
 			value, present, err = evaluateValue(*definition.DefaultValue, nil)
 			if err != nil {
-				return nil, fmt.Errorf("variable $%s default: %w", definition.Name, err)
+				return nil, definition.Position, fmt.Errorf("variable $%s default: %w", definition.Name, err)
 			}
 		}
 		value, present, err = executor.coerceInput(definition.Type, value, present, "$"+definition.Name)
 		if err != nil {
-			return nil, err
+			return nil, definition.Position, err
 		}
 		if present {
 			coerced[definition.Name] = value
 		}
 	}
-	return coerced, nil
+	return coerced, graphqlast.SourcePosition{}, nil
 }
 
 func (executor *Executor) coerceArguments(

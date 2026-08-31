@@ -38,24 +38,27 @@ func (executor *Executor) Execute(ctx context.Context, request Request) Result {
 
 	snapshot := request.Operation.Snapshot()
 	operation, err := selectOperation(snapshot.Operations, request.OperationName)
-	if err != nil || operation.Kind == graphqlast.OperationSubscription {
-		return requestFailure()
-	}
-	variables, err := executor.coerceVariables(request.Variables, operation.Variables)
 	if err != nil {
 		return requestFailure()
+	}
+	if operation.Kind == graphqlast.OperationSubscription {
+		return requestFailureAt(operation.Position)
+	}
+	variables, variablePosition, err := executor.coerceVariables(request.Variables, operation.Variables)
+	if err != nil {
+		return requestFailureAt(preferPosition(variablePosition, operation.Position))
 	}
 	assessment, err := complexity.Check(
 		executor.schema, operation, snapshot.Fragments, variables, executor.limits,
 	)
 	if err != nil {
-		return requestFailure()
+		return requestFailureAt(operation.Position)
 	}
 	switch assessment.Exceeded {
 	case complexity.DepthLimit:
-		return depthLimitFailure(assessment.Depth, assessment.MaxDepth)
+		return depthLimitFailure(assessment.Depth, assessment.MaxDepth, operation.Position)
 	case complexity.CostLimit:
-		return costLimitFailure(assessment.Cost, assessment.MaxCost)
+		return costLimitFailure(assessment.Cost, assessment.MaxCost, operation.Position)
 	}
 	fragments := make(map[string]graphqlast.ExecutableFragment, len(snapshot.Fragments))
 	for _, fragment := range snapshot.Fragments {
@@ -63,7 +66,7 @@ func (executor *Executor) Execute(ctx context.Context, request Request) Result {
 	}
 	rootType := executor.rootType(operation.Kind)
 	if rootType == "" {
-		return requestFailure()
+		return requestFailureAt(operation.Position)
 	}
 
 	ctx, cancel := context.WithDeadline(ctx, request.Deadline)
@@ -126,7 +129,11 @@ func (executor *Executor) executeSelectionSet(
 ) (orderedObject, []Error, bool) {
 	fields, err := executor.collectFields(runtimeType, selectionSet, state.fragments, state.variables)
 	if err != nil {
-		return orderedObject{}, []Error{newExecutionError(conduiterrors.InvalidRequest, path)}, true
+		var position graphqlast.SourcePosition
+		if len(selectionSet) > 0 {
+			position = selectionSet[0].Position
+		}
+		return orderedObject{}, []Error{newExecutionError(conduiterrors.InvalidRequest, path, position)}, true
 	}
 	results := make([]fieldResult, len(fields))
 	if serial || len(fields) < 2 {
@@ -173,21 +180,21 @@ func (executor *Executor) executeField(
 	arguments, err := executor.coerceArguments(first, state.variables)
 	if err != nil {
 		return fieldResult{
-			value: nil, errors: []Error{newExecutionError(conduiterrors.InvalidRequest, fieldPath)},
+			value: nil, errors: []Error{newExecutionError(conduiterrors.InvalidRequest, fieldPath, first.Position)},
 			bubble: first.Type.NonNull,
 		}
 	}
 	coordinate, err := datasource.NewFieldRef(first.ParentType, first.Name)
 	if err != nil {
 		return fieldResult{
-			value: nil, errors: []Error{newExecutionError(conduiterrors.InternalInvariant, fieldPath)},
+			value: nil, errors: []Error{newExecutionError(conduiterrors.InternalInvariant, fieldPath, first.Position)},
 			bubble: first.Type.NonNull,
 		}
 	}
 	resolver, ok := executor.bindings.Lookup(coordinate)
 	if !ok {
 		return fieldResult{
-			value: nil, errors: []Error{newExecutionError(conduiterrors.InternalInvariant, fieldPath)},
+			value: nil, errors: []Error{newExecutionError(conduiterrors.InternalInvariant, fieldPath, first.Position)},
 			bubble: first.Type.NonNull,
 		}
 	}
@@ -197,7 +204,7 @@ func (executor *Executor) executeField(
 		value, ok = projectParent(parent, resolver.ParentPath)
 		if !ok {
 			return fieldResult{
-				value: nil, errors: []Error{newExecutionError(conduiterrors.SourceInvalidResponse, fieldPath)},
+				value: nil, errors: []Error{newExecutionError(conduiterrors.SourceInvalidResponse, fieldPath, first.Position)},
 				bubble: first.Type.NonNull,
 			}
 		}
@@ -206,7 +213,7 @@ func (executor *Executor) executeField(
 		if err != nil {
 			category := sourceErrorCategory(err)
 			return fieldResult{
-				value: nil, errors: []Error{newExecutionError(category, fieldPath)}, bubble: first.Type.NonNull,
+				value: nil, errors: []Error{newExecutionErrorFrom(category, err, fieldPath, first.Position)}, bubble: first.Type.NonNull,
 			}
 		}
 	}
@@ -215,7 +222,7 @@ func (executor *Executor) executeField(
 	for _, occurrence := range field.occurrences {
 		childSelections = append(childSelections, occurrence.SelectionSet...)
 	}
-	return executor.completeValue(ctx, state, first.Type, value, childSelections, fieldPath)
+	return executor.completeValue(ctx, state, first.Type, value, childSelections, fieldPath, first.Position)
 }
 
 func (executor *Executor) resolveSource(
@@ -299,18 +306,31 @@ func requestFailure() Result {
 	}
 }
 
-func depthLimitFailure(depth, maximum int) Result {
-	failure := newExecutionError(conduiterrors.InvalidRequest, nil)
+func requestFailureAt(position graphqlast.SourcePosition) Result {
+	return Result{
+		Data: jsonNull(), Errors: []Error{newExecutionError(conduiterrors.InvalidRequest, nil, position)},
+	}
+}
+
+func depthLimitFailure(depth, maximum int, position graphqlast.SourcePosition) Result {
+	failure := newExecutionError(conduiterrors.InvalidRequest, nil, position)
 	failure.depth = &depth
 	failure.maxDepth = &maximum
 	return Result{Data: jsonNull(), Errors: []Error{failure}}
 }
 
-func costLimitFailure(cost, maximum string) Result {
-	failure := newExecutionError(conduiterrors.ComplexityExceeded, nil)
+func costLimitFailure(cost, maximum string, position graphqlast.SourcePosition) Result {
+	failure := newExecutionError(conduiterrors.ComplexityExceeded, nil, position)
 	failure.cost = cost
 	failure.maxCost = maximum
 	return Result{Data: jsonNull(), Errors: []Error{failure}}
+}
+
+func preferPosition(primary, fallback graphqlast.SourcePosition) graphqlast.SourcePosition {
+	if primary.Line > 0 && primary.Column > 0 {
+		return primary
+	}
+	return fallback
 }
 
 func jsonNull() []byte { return []byte("null") }

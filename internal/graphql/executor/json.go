@@ -8,6 +8,8 @@ import (
 	"unicode/utf8"
 
 	conduiterrors "github.com/Zachshotamartin/conduit/internal/errors"
+	graphqlast "github.com/Zachshotamartin/conduit/internal/graphql/ast"
+	"github.com/Zachshotamartin/conduit/internal/observability/redaction"
 )
 
 type orderedField struct {
@@ -136,11 +138,30 @@ func appendPath(path []any, segment any) []any {
 	return result
 }
 
-func newExecutionError(category conduiterrors.Category, path []any) Error {
-	classified := conduiterrors.New(category)
+func newExecutionError(
+	category conduiterrors.Category,
+	path []any,
+	positions ...graphqlast.SourcePosition,
+) Error {
+	return newExecutionErrorFrom(category, nil, path, positions...)
+}
+
+func newExecutionErrorFrom(
+	category conduiterrors.Category,
+	diagnostic error,
+	path []any,
+	positions ...graphqlast.SourcePosition,
+) Error {
+	locations := make([]Location, 0, len(positions))
+	for _, position := range positions {
+		if position.Line > 0 && position.Column > 0 {
+			locations = append(locations, Location{Line: position.Line, Column: position.Column})
+		}
+	}
 	return Error{
-		Message: classified.SafeMessage(),
-		Path:    append([]any(nil), path...),
-		Code:    classified.Category(),
+		Message:   redaction.ClientErrorMessage(category, diagnostic),
+		Path:      append([]any(nil), path...),
+		Locations: locations,
+		Code:      conduiterrors.New(category).Category(),
 	}
 }
