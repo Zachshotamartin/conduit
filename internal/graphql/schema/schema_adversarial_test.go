@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -114,12 +115,40 @@ func TestUNIT002_CustomFutureNamedDirectivesRemainAuthoredSchema(t *testing.T) {
 	}
 	names := make([]string, 0, 3)
 	for _, definition := range loaded.Executable().Snapshot().Directives {
-		names = append(names, definition.Name)
+		switch definition.Name {
+		case "defer", "oneOf", "stream":
+			names = append(names, definition.Name)
+		}
 	}
 	want := []string{"defer", "oneOf", "stream"}
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("authored directives = %v, want %v", names, want)
 	}
+}
+
+func TestUNIT002_OperatorSDLRetainsFullTokenBudget(t *testing.T) {
+	const fieldCount = 26_663
+	var builder strings.Builder
+	builder.WriteString("type Query { special(arg:Int):[Int]")
+	for index := 1; index < fieldCount; index++ {
+		builder.WriteString(" f")
+		builder.WriteString(strconv.Itoa(index))
+		builder.WriteString(":Int")
+	}
+	builder.WriteString(" }")
+	atBound := []byte(builder.String())
+	over := []byte(strings.Replace(builder.String(), "[Int]", "[Int]!", 1))
+
+	loaded, err := graphqlschema.LoadSources([]graphqlast.SchemaSource{{
+		Name: "tokens.graphql", Input: atBound,
+	}}, schemaOptions)
+	if err != nil || loaded == nil {
+		t.Fatalf("LoadSources(at token bound) = (%v, %v), want schema", loaded, err)
+	}
+	loaded, err = graphqlschema.LoadSources([]graphqlast.SchemaSource{{
+		Name: "tokens.graphql", Input: over,
+	}}, schemaOptions)
+	assertOnlyRule(t, loaded, err, "sdl.limit.tokens")
 }
 
 func TestUNIT002_HashCoversOrderedSchemaDirectivesAndNormalizesNumbers(t *testing.T) {

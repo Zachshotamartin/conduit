@@ -5,7 +5,8 @@
     "valid/complexity-singleton-multiplier.graphql",
     "valid/backpressure-inherit.graphql",
     "valid/filterable-builtins.graphql",
-    "valid/custom-future-named-directives.graphql"
+    "valid/custom-future-named-directives.graphql",
+    "valid/interface-extension-implements.graphql"
   ],
   "invalid": [
     {"file":"invalid/syntax.graphql","rule":"graphql.sdl.syntax"},
@@ -77,6 +78,7 @@
     {"file":"invalid/conduit-duplicate-argument.graphql","rule":"graphql.directive.unique_argument"},
     {"file":"invalid/conduit-unknown-argument.graphql","rule":"graphql.directive.known_argument"},
     {"file":"invalid/source-subscription-union.graphql","rule":"conduit.source.subscription_io"},
-    {"file":"invalid/source-subscription-interface.graphql","rule":"conduit.source.subscription_io"}
+    {"file":"invalid/source-subscription-interface.graphql","rule":"conduit.source.subscription_io"},
+    {"file":"invalid/input-extension-variable-directive.graphql","rule":"graphql.sdl.syntax"}
   ]
 }
