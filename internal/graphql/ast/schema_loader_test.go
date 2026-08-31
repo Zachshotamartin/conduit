@@ -1,6 +1,7 @@
 package ast_test
 
 import (
+	"bytes"
 	stderrors "errors"
 	"reflect"
 	"strings"
@@ -15,7 +16,7 @@ func TestUNIT002_SchemaLoaderEnforcesAggregatePreparseBound(t *testing.T) {
 
 	const max = 4 << 20
 	base := []byte("type Query { ok: Boolean! }\n")
-	atBound := append(append([]byte(nil), base...), make([]byte, max-len(base))...)
+	atBound := append(append([]byte(nil), base...), bytes.Repeat([]byte(" "), max-len(base))...)
 	loaded, err := graphqlast.LoadSchema(
 		[]graphqlast.SchemaSource{{Name: "schema.graphql", Input: atBound}},
 		graphqlast.SchemaLimits{},
