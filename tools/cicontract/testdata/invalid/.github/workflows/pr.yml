@@ -1,0 +1,41 @@
+name: pr
+
+on:
+  push:
+    branches: [develop]
+
+permissions: write-all
+
+env:
+  PATH: /attacker
+
+concurrency: bypass
+
+jobs:
+  lint:
+    name: lint
+    if: success()
+    continue-on-error: false
+    runs-on: self-hosted
+    env:
+      GOFLAGS: -mod=mod
+    container: attacker/image:latest
+    timeout-minutes: 30
+    steps:
+      - run: staticcheck ./...
+        if: success()
+        continue-on-error: false
+        shell: "true {0}"
+        working-directory: /tmp
+        id: bypass
+      - uses: actions/upload-artifact@v4
+        with:
+          name: short-lived-pr-evidence
+          path: reports/
+          retention-days: 7
+  unit-race:
+    name: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - run: go test ./...

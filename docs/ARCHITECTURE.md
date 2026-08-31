@@ -1,6 +1,7 @@
 # Conduit Architecture
 
-Document status: normative architecture. Last revised: 2026-08-30.
+Document status: accepted.
+Normative architecture. Last revised: 2026-08-30.
 
 Companion specifications: [Product requirements](./PRODUCT_REQUIREMENTS.md), [Build plan](./BUILD_PLAN.md),
 [Protocol conformance](./PROTOCOL_CONFORMANCE.md), [Authorization model](./AUTHORIZATION_MODEL.md),
@@ -13,10 +14,11 @@ This document controls component boundaries and interface contracts (conflict ru
 index](./README.md)). It does not mint requirement IDs; every requirement cited here is defined in
 PRODUCT_REQUIREMENTS.md and owned by a gate in BUILD_PLAN §19. Every component described in this document is
 `planned`: nothing below is an implementation claim, and no section may be read as one until the named gate
-accepts. Accepted ADRs 0001–0011 bind every decision this document elaborates; where prose here and an ADR
+accepts. Accepted ADRs 0001–0012 bind every decision this document elaborates; where prose here and an ADR
 could be read differently, the ADR controls.
 
-All interface listings are Go (toolchain Go 1.23, ADR-0001) and are the normative port contracts; an
+All interface listings use Go 1.23 language semantics and the exact Go 1.26.7 toolchain
+(ADR-0001 and ADR-0012) and are the normative port contracts; an
 implementation that must widen one changes this document in the same change set, and a widening that alters
 a versioned wire contract follows NFR-COMPAT-003.
 

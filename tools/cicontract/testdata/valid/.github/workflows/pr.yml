@@ -1,0 +1,192 @@
+name: pr
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: GO=go ./scripts/check-format.sh
+      - run: ./scripts/check-determinism.sh
+      - run: go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
+      - run: '"$(go env GOPATH)/bin/staticcheck" ./...'
+      - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+      - run: '"$(go env GOPATH)/bin/golangci-lint" run'
+      - run: go run -mod=vendor ./tools/claimslint .
+      - run: go run -mod=vendor ./tools/cicontract -root .
+  vet:
+    name: vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go vet -mod=vendor ./...
+  arch-check:
+    name: arch-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go run -mod=vendor ./tools/archcheck
+  unit-race:
+    name: unit-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go test -mod=vendor -race -shuffle=on ./...
+      - name: Retain failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr-failure-evidence
+          path: reports/
+          retention-days: 30
+  proto-race:
+    name: proto-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go test -mod=vendor -race -shuffle=on ./internal/protocol/...
+  authz-race:
+    name: authz-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go test -mod=vendor -race -shuffle=on ./internal/auth/...
+  index-race:
+    name: index-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go test -mod=vendor -race -shuffle=on ./internal/filter/index/...
+  docs-status-lint:
+    name: docs-status-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go run -mod=vendor ./tools/docsstatus ./docs
+      - run: go run -mod=vendor ./tools/claimslint .
+  metrics-contract:
+    name: metrics-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go test -mod=vendor ./internal/observability/...
+  deps-audit:
+    name: deps-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go test -mod=vendor ./tools/depsaudit
+      - run: go run -mod=vendor ./tools/depsaudit -root .
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+      - run: '"$(go env GOPATH)/bin/govulncheck" ./...'
+  trace-check:
+    name: trace-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go test -mod=vendor ./tools/tracecheck ./internal/observability/... ./internal/transport/...
+      - run: go run -mod=vendor ./tools/tracecheck -root .
+  macos-correctness:
+    name: macos-correctness
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go env GOOS GOARCH
+      - run: make bootstrap
+      - run: make check
+      - run: make test
+  linux-arm64-correctness:
+    name: linux-arm64-correctness
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - run: go env GOOS GOARCH
+      - run: make bootstrap
+      - run: make check
+      - run: make test

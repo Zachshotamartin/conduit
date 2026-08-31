@@ -1,8 +1,9 @@
 # Conduit: Installation, Testing, Operations, and Release Plan
 
-Document status: normative lifecycle, verification, and release specification.
-Every deliverable named in this document is `planned` unless a gate subsection
-in §18 states otherwise. Last revised: 2026-08-30.
+Document status: accepted.
+This is the normative lifecycle, verification, and release specification.
+Gate R0 repository infrastructure is `in progress`; R1 through R10 remain
+`planned`. Last revised: 2026-08-30.
 
 Companion sources of truth:
 
@@ -24,7 +25,7 @@ Companion sources of truth:
   statistical treatment, and the claims ladder for every number in §12.
 - [Glossary](GLOSSARY.md) — controlled terms; this document uses them with
   those meanings and no others.
-- ADR-0001 through ADR-0011 in [decisions/](decisions/) — binding decisions
+- ADR-0001 through ADR-0012 in [decisions/](decisions/) — binding decisions
   this plan operationalizes.
 
 ## 1. Operating Model and Lifecycle Invariants
@@ -92,9 +93,9 @@ could tempt a shortcut:
   the deterministic model; they never substitute for it.
 - **Status honesty.** Every deliverable in this document carries exactly one
   status: `accepted`, `in progress`, `planned`, or `deferred` (GLOSSARY
-  status vocabulary). At the time of writing all deliverables here are
-  `planned`. Nothing becomes `accepted` without its named automated gate
-  (NFR-MAINT-004).
+  status vocabulary). R0 repository infrastructure is `in progress`; all
+  later-gate deliverables remain `planned`. Nothing becomes `accepted`
+  without its named automated gate (NFR-MAINT-004).
 
 ### 1.3 Evidence purpose
 
@@ -125,7 +126,7 @@ tags; the R0 architecture check fails any other package containing
 
 | Component | Pinned or supported range | Enforcement |
 | --- | --- | --- |
-| Go toolchain | 1.23.x, exact patch pinned by the `toolchain` directive in `go.mod` | CI fails if `go version` differs from the pin; ADR-0001 |
+| Go toolchain | 1.26.7, with Go 1.23.0 language semantics retained by the `go` directive | `make bootstrap`, every supported Go-using Make entrypoint, and CI force/select 1.26.7 and fail if `go version` differs; ADR-0012 |
 | NATS server | 2.10.x through 2.11.x; container suites pin one exact digest per range endpoint | Nightly `nats-matrix` job runs both endpoints (§11.4) |
 | nats.go client | Exact version pinned in `go.mod` | Dependency review gate §5 |
 | PostgreSQL (relational source, FR-GQL-004) | 14, 15, 16; container suites pin exact digests | `integration-postgres` job runs 14 and 16; 15 nightly |
@@ -134,7 +135,7 @@ tags; the R0 architecture check fails any other package containing
 | Kubernetes (deploy tests) | 1.29 through 1.31 via kind; manifests validated against all three | R10 cluster suite |
 | kind | 0.23 or later | Cluster harness bootstrap check |
 | Container runtime | Docker Engine 24+ or Podman 4.9+ | `make integration` preflight |
-| syft / cosign / benchstat / staticcheck / golangci-lint / govulncheck | Exact versions pinned in `Makefile` tool block | `make bootstrap` installs the pins; CI verifies versions |
+| syft / cosign / benchstat / staticcheck / golangci-lint / govulncheck | Exact versions pinned in `scripts/bootstrap.sh` | `make bootstrap` installs and verifies the pins; CI invokes the same bootstrap contract or an exact CI-contract-checked install command |
 
 ### 2.3 Developer-machine expectations
 
@@ -176,8 +177,8 @@ and `workflow`; if not, run `gh auth login --scopes repo,workflow` and
 re-check. Then create and protect the repository:
 
 ```sh
-gh repo create conduit-gateway/conduit --private --source . --remote origin --push
-gh api -X PUT "repos/conduit-gateway/conduit/branches/main/protection" \
+gh repo create Zachshotamartin/conduit --private --source . --remote origin --push
+gh api -X PUT "repos/Zachshotamartin/conduit/branches/main/protection" \
   --input .github/branch-protection.json
 ```
 
@@ -245,9 +246,14 @@ From a clean Tier 1 or Tier 2 machine to green tests:
 
 1. Install Git 2.40+ and the `gh` CLI 2.40+ via the platform package
    manager, then authenticate: `gh auth login --scopes repo,workflow`.
-2. Install any Go 1.21+ bootstrap toolchain (`brew install go` or the
-   linux tarball); the `toolchain` directive in `go.mod` makes `go`
-   download and use the exact pinned 1.23.x automatically. Verify:
+2. Install a Go 1.21 or newer launcher, which supports Go's toolchain
+   selection mechanism. The `toolchain go1.26.7` directive in `go.mod`
+   records the preferred toolchain, but that preference is not the
+   repository's enforcement boundary. The Makefile and
+   `scripts/bootstrap.sh` force `GOTOOLCHAIN=go1.26.7` for supported
+   entrypoints, downloading that toolchain when the launcher's normal
+   download policy permits, and explicitly reject a selected version other
+   than Go 1.26.7. CI installs that exact version directly. Verify:
 
    ```sh
    go version
@@ -256,7 +262,7 @@ From a clean Tier 1 or Tier 2 machine to green tests:
 3. Clone:
 
    ```sh
-   git clone https://github.com/conduit-gateway/conduit.git
+   git clone https://github.com/Zachshotamartin/conduit.git
    cd conduit
    ```
 
@@ -266,12 +272,15 @@ From a clean Tier 1 or Tier 2 machine to green tests:
    make bootstrap
    ```
 
-   `make bootstrap` performs exactly: `go mod download` against the vendored
-   module set; installation of the pinned versions of `staticcheck`,
-   `golangci-lint`, `govulncheck`, `benchstat`, `syft`, and `cosign` into
-   `./bin`; verification that each installed tool reports its pinned
-   version; and a preflight report of Docker/Podman availability and the
-   file-descriptor limit. It writes nothing outside the repository and
+   `make bootstrap` performs exactly: `go mod download` for the module graph
+   declared by `go.mod`, verified with checksums from `go.sum`; installation
+   of the pinned versions of `staticcheck`, `golangci-lint`, `govulncheck`,
+   `benchstat`, `syft`, and `cosign` into `./bin`; verification that each
+   installed tool reports its pinned version and compiler version; and a
+   preflight report of Docker/Podman availability and the file-descriptor
+   limit. It can write the repository-local `./bin` directory, the module
+   cache reported by `go env GOMODCACHE`, and the build cache reported by
+   `go env GOCACHE`; on a default Go installation the module cache is beneath
    `$GOPATH`.
 5. Run the deterministic suites (no containers, no network):
 
@@ -730,6 +739,10 @@ flakes; any flake opens a blocking bug ticket for the owning gate.
 | UNIT-016 | Map every process-exit path — validate failure, doctor failure, bind failure, drain-complete, fatal — to exit codes. | Each category has one stable documented exit code; `conduit validate` exits nonzero on any error (PRODUCT_REQUIREMENTS §5.3); codes are asserted from a table shared with the docs. | R0 |
 | UNIT-017 | Coerce variables against declared types: unknown, missing-required, type-mismatched, null-for-non-null, nested input objects. | The whole operation fails with locations before execution (FR-GQL-013); coercion matches the October 2021 rules for supported features (NFR-COMPAT-002). | R1 |
 | UNIT-018 | Construct principals from each auth mode's output and attempt post-construction mutation via retained references. | The principal is immutable per connection, carries subject/tenant/scopes/claims/expiry/mode/epoch, and never contains raw credentials (FR-AUTH-005); mutation attempts do not alter the registered principal. | R3 |
+| UNIT-019 | Execute every architecture rule against its hostile and compliant module-graph fixtures, the exact sink-owner inventory, and the real repository with an empty offline module cache. | Every declared rule is executable configuration with a named failing fixture; malformed or incomplete policy fails closed; the real graph passes (NFR-MAINT-001). | R0 |
+| UNIT-020 | Run the documentation-status and claims-ladder linters against quoted, fenced, unmarked, ambiguous-status, missing-register-row, and public-asset fixtures plus the real repository. | Only the four lifecycle values are accepted; placeholder and unearned-claim bypasses fail; the exact claims register and current public assets pass (NFR-MAINT-004). | R0 |
+| UNIT-021 | Audit runtime and test package graphs, go.mod replacement attempts, vendor pins and source digests, licenses, gate timing, package confinement, and dependency-review coverage. | Any unapproved, premature, replaced, modified, unreviewed, wrongly licensed, or wrongly confined module fails closed; the pinned reviewed graph passes offline (NFR-MAINT-005, NFR-SEC-010). | R0 |
+| UNIT-022 | Drive the fake clock through schedule, cancellation, equal-deadline ordering, and concurrent advance, then syntax-scan repository tests for wall-clock and unseeded-randomness bypasses. | Time advances only explicitly with stable callback ordering; direct nondeterministic APIs including aliases and dot imports fail the source check; the full test tree passes (NFR-MAINT-006). | R0 |
 
 ### 10.2 PROTO — protocol conformance matrix
 
@@ -1004,7 +1017,7 @@ reproducibility mismatch (PKG-001) is never retried, it is a finding.
 | Workflow | Trigger | Jobs (exact required-check names where applicable) | Budget |
 | --- | --- | --- | --- |
 | `pr.yml` | Every PR and push to `main` | `lint`, `vet`, `arch-check`, `unit-race`, `proto-race`, `authz-race`, `index-race`, `docs-status-lint`, `metrics-contract`, `deps-audit`, `trace-check` — all with `-race` on for test jobs | ≤ 15 min wall clock for the whole workflow |
-| `integration.yml` | Every PR touching transport, bus, source, or auth packages; every push to `main` | `conformance-node` (reference-client suite, class c), `integration-nats` (broker suite), `integration-postgres` (relational adapter, PG 14 and 16), `socket-hostile` (class b hostile suite) | ≤ 25 min wall clock |
+| `integration.yml` | Every PR and every push to `main`; required job contexts always report, while later gates may conditionally skip expensive job steps for PRs outside transport, bus, data-source, or auth paths | `conformance-node` (reference-client suite, class c), `integration-nats` (broker suite), `integration-postgres` (relational adapter, PG 14 and 16), `socket-hostile` (class b hostile suite) | ≤ 25 min wall clock |
 | `nightly.yml` | Scheduled daily; manual dispatch | `fuzz` (all frame/document/token parsers, 30 min per target, corpus persisted), `soak-accelerated` (SOAK-003 accelerated form plus SOAK-006 method), `chaos-full` (all CHAOS rows), `nats-matrix` (broker range endpoints per §2.2), `bench-regression` (§12.3 benchstat comparison), `index-property-extended` (INDEX-001 at 20× iterations) | ≤ 8 h; each job individually bounded |
 | `release.yml` | Tags `v*` and release-candidate dispatch | `package` (build matrix, PKG-001–PKG-005, PKG-009), `provenance` (PKG-006 signing and attestation), `cross-version-fixtures` (NFR-COMPAT-005 fixture suite, §14.5), `image-scan` (vulnerability scan of the release image), `kind-install` (PKG-010) | ≤ 60 min |
 
@@ -1171,11 +1184,11 @@ notes like any other document (NFR-MAINT-004); the claims-ladder audit
 ### 14.1 Binary installation and first run
 
 ```sh
-curl -fsSLO https://github.com/conduit-gateway/conduit/releases/download/${VERSION}/conduit-linux-amd64
-curl -fsSLO https://github.com/conduit-gateway/conduit/releases/download/${VERSION}/SHA256SUMS
-curl -fsSLO https://github.com/conduit-gateway/conduit/releases/download/${VERSION}/SHA256SUMS.sig
+curl -fsSLO https://github.com/Zachshotamartin/conduit/releases/download/${VERSION}/conduit-linux-amd64
+curl -fsSLO https://github.com/Zachshotamartin/conduit/releases/download/${VERSION}/SHA256SUMS
+curl -fsSLO https://github.com/Zachshotamartin/conduit/releases/download/${VERSION}/SHA256SUMS.sig
 cosign verify-blob --signature SHA256SUMS.sig \
-  --certificate-identity-regexp 'github.com/conduit-gateway/conduit' \
+  --certificate-identity-regexp 'github.com/Zachshotamartin/conduit' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
 install -m 0755 conduit-linux-amd64 /usr/local/bin/conduit
@@ -1195,13 +1208,13 @@ it. The R10 evidence includes a scripted execution of exactly this flow.
 ### 14.2 Container installation
 
 ```sh
-cosign verify ghcr.io/conduit-gateway/conduit:${VERSION} \
-  --certificate-identity-regexp 'github.com/conduit-gateway/conduit' \
+cosign verify ghcr.io/zachshotamartin/conduit:${VERSION} \
+  --certificate-identity-regexp 'github.com/Zachshotamartin/conduit' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 docker run --rm \
   -v /etc/conduit:/etc/conduit:ro \
   -p 8443:8443 -p 9443:9443 \
-  ghcr.io/conduit-gateway/conduit:${VERSION} \
+  ghcr.io/zachshotamartin/conduit:${VERSION} \
   serve --config /etc/conduit/conduit.yaml
 ```
 
@@ -1257,7 +1270,7 @@ Procedure (rehearsed by CHAOS-001):
    envelopes, control messages, and resume tokens written by N are readable
    by N+1 and vice versa (FR-OPS-005, NFR-COMPAT-005). Cross-version
    fixtures are release-blocking from the first tagged release.
-2. `kubectl set image deployment/conduit conduit=ghcr.io/conduit-gateway/conduit:${NEW_VERSION}`
+2. `kubectl set image deployment/conduit conduit=ghcr.io/zachshotamartin/conduit:${NEW_VERSION}`
    then `kubectl rollout status deployment/conduit`.
 3. Each pod drains per FR-CONN-010; clients reconnect with resume tokens to
    remaining capacity; no client sees a protocol behavior change
@@ -1480,7 +1493,8 @@ Each subsection lists the operations evidence this plan adds; the ticket
 list and per-gate evidence matrix live in BUILD_PLAN §X.9 of the owning gate
 and are referenced, not duplicated. A gate closes only when its BUILD_PLAN
 evidence checklist and the operations additions below are green on one SHA,
-with the run pinned per §11.3. All gates are `planned`.
+with the run pinned per §11.3. R0 is `in progress`; R1 through R10 remain
+`planned`.
 
 ### 18.1 R0 — repository, toolchain, CI, architecture checks
 
@@ -1488,7 +1502,7 @@ Evidence commands and workflows:
 
 ```sh
 gh auth status
-gh api repos/conduit-gateway/conduit/branches/main/protection
+gh api repos/Zachshotamartin/conduit/branches/main/protection
 make bootstrap && make check && make test
 ```
 
@@ -1738,5 +1752,6 @@ FR-ADMIN-008; FR-OPS-001 through FR-OPS-013; NFR-PERF-001 through
 NFR-PERF-006; NFR-SCALE-001 through NFR-SCALE-006; NFR-SEC-001 through
 NFR-SEC-010; NFR-COMPAT-001 through NFR-COMPAT-006; NFR-MAINT-001 through
 NFR-MAINT-006. Gate ownership for every ID follows BUILD_PLAN §19; where
-any statement here and that matrix disagree, the matrix controls. Every
-deliverable in this document is `planned` at the time of writing.
+any statement here and that matrix disagree, the matrix controls. Gate R0
+repository infrastructure in this document is `in progress`; every
+later-gate deliverable remains `planned`.

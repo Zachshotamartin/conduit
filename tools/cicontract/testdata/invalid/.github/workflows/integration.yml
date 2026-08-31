@@ -1,0 +1,20 @@
+name: integration
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  conformance-node:
+    name: conformance-node-renamed
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - run: "true"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: short-lived-integration-evidence
+          path: reports/
+          retention-days: 7

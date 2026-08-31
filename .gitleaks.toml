@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Documented opaque resume-token example; not a credential"
+regexTarget = "match"
+paths = ['''^docs/PROTOCOL_CONFORMANCE\.md$''']
+regexes = ['''token": "b64u\.opaque\.signed"''']

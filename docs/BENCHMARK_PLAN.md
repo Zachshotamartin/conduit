@@ -1,5 +1,7 @@
 # Conduit Benchmark Plan
 
+Document status: accepted.
+
 Status of every deliverable in this document: `planned`. Nothing below has
 been measured. No number in this document is a result; every number is a
 target, a workload parameter, or a pass rule. Last revised: 2026-08-30.

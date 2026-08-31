@@ -1,0 +1,4 @@
+listener:
+  client:
+    transport: plaintext
+    plaintext_acknowledged: false

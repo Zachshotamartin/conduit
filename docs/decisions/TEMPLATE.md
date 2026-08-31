@@ -1,6 +1,8 @@
 # ADR-NNNN: Title
 
-- Status: proposed | accepted | superseded by ADR-NNNN
+Document status: accepted.
+
+- Decision state: proposed | accepted | superseded by ADR-NNNN
 - Date: YYYY-MM-DD
 - Related findings or requirements: FR-XXX-###, NFR-XXX-###, gate R#, or none
 

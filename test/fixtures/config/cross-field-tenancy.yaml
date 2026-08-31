@@ -1,0 +1,4 @@
+tenancy:
+  enabled: false
+  schema_sets:
+    - tenant-a.yaml

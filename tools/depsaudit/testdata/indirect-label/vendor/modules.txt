@@ -1,0 +1,4 @@
+# example.com/rogue v0.0.0 => ./stubs/example.com/rogue
+## explicit; go 1.23.0
+example.com/rogue
+# example.com/rogue => ./stubs/example.com/rogue

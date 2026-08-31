@@ -1,0 +1,3 @@
+auth:
+  expiry_warning_window: 5m
+  token_lifetime_floor: 5m

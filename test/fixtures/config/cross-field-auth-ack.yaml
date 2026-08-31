@@ -1,0 +1,3 @@
+auth:
+  mode: none
+  development_acknowledged: false

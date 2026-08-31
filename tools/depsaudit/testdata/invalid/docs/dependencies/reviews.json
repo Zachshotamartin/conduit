@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "vendor_tree_digest_algorithm": "sha256-framed-tree-v1",
+  "reviews": [
+    {
+      "module": "example.com/rogue",
+      "version": "v0.0.0",
+      "status": "accepted",
+      "review_file": "fixture-review.md",
+      "vendor_tree_sha256": "sha256:c8afd06d8ee54949051c97a2b39c50a4cd0f691c50bf2badb36acc73fd1165f0"
+    },
+    {
+      "module": "github.com/coder/websocket",
+      "version": "v0.0.0",
+      "status": "accepted",
+      "review_file": "fixture-review.md",
+      "vendor_tree_sha256": "sha256:01b703e4fc345d76d277c6a0961dbe9ee4a94ebf5b755eec0fb7155fec11806c"
+    },
+    {
+      "module": "github.com/nats-io/nats.go",
+      "version": "v0.0.0",
+      "status": "accepted",
+      "review_file": "fixture-review.md",
+      "vendor_tree_sha256": "sha256:8a2a821d1ddb4a50211a7dcdc52677da9662cd045009489fa6ef3b394156a6a6"
+    }
+  ],
+  "transitive_disclosures": []
+}

@@ -1,5 +1,8 @@
 # Conduit Documentation Index
 
+Document status: accepted.
+Normative documentation index. Last revised: 2026-08-30.
+
 Conduit is a self-hosted GraphQL gateway whose reason for existing is the
 subscription path: clients subscribe over WebSocket with per-subscription
 filters, mutations publish, and the gateway fans out to every matching
@@ -70,11 +73,14 @@ Read these documents first and in this order:
 
 - [Decision record directory](decisions/) contains accepted and proposed ADRs.
 - [ADR template](decisions/TEMPLATE.md) defines the required record structure.
-- The initial binding decisions are ADR-0001 through ADR-0011: language and
+- The initial binding decisions are ADR-0001 through ADR-0012: language and
   runtime, protocol support, execution approach, bus selection,
   connection-state ownership, predicate index structure, delivery guarantee,
   token refresh and revocation, multi-tenancy isolation, observability stack,
-  and supported platforms.
+  supported platforms, and the security-supported toolchain pin.
+- ADR-0013 and ADR-0014 record the provisional gate stack and the owner's
+  subsequent authorization to make the repository public before R10 without
+  promoting any gate or product claim.
 - A reversal of any accepted decision requires a new ADR that supersedes the
   old one. Silent edits to an earlier decision are forbidden.
 

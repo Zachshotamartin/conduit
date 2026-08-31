@@ -1,6 +1,7 @@
 # Conduit Threat Model
 
-Document status: normative security analysis. Last revised: 2026-08-30.
+Document status: accepted.
+Normative security analysis. Last revised: 2026-08-30.
 
 Nothing in this document is an implementation claim. Every control below is `planned`; every
 evidence line names the future gate evidence (test family plus owning gate R0–R10 per BUILD_PLAN)

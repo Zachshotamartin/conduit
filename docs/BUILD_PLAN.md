@@ -1,7 +1,8 @@
 # Conduit: Exhaustive Build Plan
 
-Document status: normative implementation plan for Conduit. Nothing described
-in this plan is implemented at the time of writing.
+Document status: accepted.
+This is the normative implementation plan for Conduit. Gate R0 repository
+infrastructure is `in progress`; no product gate is accepted.
 
 Last revised: 2026-08-30.
 
@@ -41,8 +42,7 @@ Every deliverable has exactly one of four statuses:
 A package, type, stub, or happy-path unit test is never completion. A gate is
 accepted only when its user-visible flow, failure behavior, security cases,
 documentation, and the complete §X.9 acceptance checklist pass together in
-CI. At the time of writing every gate is `planned` except where a section
-says otherwise; none does.
+CI. R0 is `in progress` on `gate/r0`; R1 through R10 remain `planned`.
 
 ### 1.2 Gates and the capability each unlocks
 
@@ -103,10 +103,15 @@ No other reordering is permitted without an ADR.
 
 ### 2.1 What exists
 
-This documentation set, the eleven accepted ADRs, and an authenticated
-GitHub CLI (`gh auth status` verified against the account that will own the
-repository, with `repo` and `workflow` scopes — the R0 prerequisite). No
-repository, no code, no CI, no tests, no benchmarks.
+The public GitHub repository, this documentation set, the fourteen accepted
+ADRs, the exact Go toolchain pin, repository-local developer bootstrap,
+deterministic clock and error foundations, configuration contracts, and R0
+checks/workflow scaffolding are in progress on `gate/r0`. No gateway listener
+or GraphQL product behavior exists on this gate branch; no gate is accepted
+and no benchmark claim is earned. The owner-authorized early publication,
+successful branch-protection read-back, and immediate publication audit are
+recorded under `docs/evidence/r0/` and ADR-0014. R0 still requires independent
+PR approval and a schedule-triggered nightly run.
 
 ### 2.2 The current honest product claim
 
@@ -211,7 +216,8 @@ reports/                   # published benchmark run reports
 docs/
 ```
 
-Import boundaries (enforced by the R0 architecture check, NFR-MAINT-001):
+Import boundaries are enforced by the R0 architecture check
+(NFR-MAINT-001):
 `transport` is the only importer of the WebSocket library; `graphql/ast` is
 the only importer of gqlparser; `protocol` imports neither executor nor
 datasource; `queue` and `registry` do not import `bus`; nothing outside
@@ -276,8 +282,8 @@ type ConnectionRegistry interface {
 
 type Clock interface {
     Now() time.Time
-    After(d time.Duration) <-chan time.Time
-    Schedule(d time.Duration, fn func()) TimerHandle // timing wheel
+    Schedule(d time.Duration, fn func(now time.Time)) TimerHandle // callback must not block
+    Cancel(h TimerHandle) bool
 }
 ```
 
@@ -411,7 +417,7 @@ accepted. The claims-ladder audit is a release-blocking CI check from R0
 
 ## 5. R0 — Repository, Toolchain, CI, and Architecture Checks
 
-**Status:** planned.
+**Status:** in progress.
 
 **Effort range:** 3–5 focused days.
 
@@ -431,7 +437,7 @@ before the harness that would prove it exists.
   `workflow` scopes (`gh auth status` exits zero and lists both). This is
   the first verified step of the entire plan and is already satisfied on the
   authoring machine (account `Zachshotamartin`).
-- ADR-0001 through ADR-0011 are accepted.
+- ADR-0001 through ADR-0012 are accepted.
 - This documentation set is complete and internally consistent.
 
 ### 5.3 Owned files, interfaces, and state
@@ -469,7 +475,8 @@ Bootstrap order (numbered, each step verifiable):
 2. `gh repo create <owner>/conduit --private --clone` (public at R10's
    publication audit, not before); default branch `main`.
 3. Commit this documentation set as the first commit.
-4. Add toolchain pin (`go 1.23.x` exact), empty module, `Makefile`,
+4. Add the exact Go 1.26.7 toolchain pin while retaining the Go 1.23.0
+   language directive (ADR-0012), empty module, `Makefile`,
    workflow skeletons; second commit.
 5. Branch protection via `gh api`: require the `pr.yml` checks, forbid
    force-push, require one review.
@@ -506,7 +513,8 @@ by the mutation call succeeding).
    the §3.2 rule set. DoD: fixture violations fail with the rule's reason;
    the real tree passes.
 7. **R0.07 — Build the docs-status and claims lints.** Forbidden-phrase
-   lint (`TODO`, `coming soon`, unstatused deliverables) over docs/ except
+   lint (the placeholder marker spelled T-O-D-O, the phrase “coming” followed
+   by “soon”, and unstatused deliverables) over docs/ except
    OPEN_QUESTIONS; claims-ladder lint over README/MARKETING_PLAN (markers
    `<!-- claim:R<n> -->` must map to accepted gates in a checked-in gate
    status file). DoD: fixtures fail; current tree passes.
@@ -533,7 +541,7 @@ by the mutation call succeeding).
 | clock determinism | Fake clock fires timers on wall time. | Scheduled callbacks fire only on explicit advance, in order, with stable tie-breaking. |
 | error taxonomy | A category lacks safe message or metric key. | Every §4.2 category constructs, serializes safely, and round-trips its category. |
 | archcheck fixtures | A forbidden import passes the checker. | Each fixture violation fails naming the rule; the real tree passes. |
-| docs-status lint | A doc contains `TODO` outside OPEN_QUESTIONS. | Lint fails on fixture, passes on tree. |
+| docs-status lint | A doc contains the configured placeholder marker outside OPEN_QUESTIONS. | Lint fails on fixture, passes on tree. |
 | claims lint | README claims a capability with no accepted gate. | Lint fails on fixture claim marker, passes on tree. |
 | config precedence | Env value fails to override file value. | Table-driven precedence and validation-phase tests pass. |
 

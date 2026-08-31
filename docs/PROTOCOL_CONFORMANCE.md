@@ -2,8 +2,8 @@
 
 ## 1. Document Status
 
-Document status: normative wire-protocol specification. Last revised:
-2026-08-30.
+Document status: accepted.
+Normative wire-protocol specification. Last revised: 2026-08-30.
 
 Companion specifications:
 [Product requirements](./PRODUCT_REQUIREMENTS.md),

@@ -1,0 +1,2 @@
+# Intentionally inconsistent: go.mod requires websocket, but the authoritative
+# vendor manifest omits it.

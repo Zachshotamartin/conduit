@@ -1,0 +1,256 @@
+name: pr
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Check formatting
+        run: GO=go ./scripts/check-format.sh
+      - name: Check deterministic test sources
+        run: ./scripts/check-determinism.sh
+      - name: Install pinned staticcheck
+        run: "go install honnef.co/go/tools/cmd/staticcheck@v0.8.1"
+      - name: Run pinned staticcheck
+        env:
+          GOFLAGS: -mod=vendor
+        run: '"$(go env GOPATH)/bin/staticcheck" ./...'
+      - name: Install pinned golangci-lint
+        run: "go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2"
+      - name: Run pinned golangci-lint
+        env:
+          GOFLAGS: -mod=vendor
+        run: '"$(go env GOPATH)/bin/golangci-lint" run'
+      - name: Check claims status
+        run: go run -mod=vendor ./tools/claimslint .
+      - name: Enforce CI contract
+        run: go run -mod=vendor ./tools/cicontract -root .
+  vet:
+    name: vet
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Vet all packages
+        run: go vet -mod=vendor ./...
+  arch-check:
+    name: arch-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Enforce package boundaries
+        run: go run -mod=vendor ./tools/archcheck
+  unit-race:
+    name: unit-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Run all tests with the race detector
+        run: go test -mod=vendor -race -shuffle=on ./...
+      - name: Retain PR failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr-failure-evidence
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30
+  proto-race:
+    name: proto-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Run current protocol package tests with the race detector
+        run: go test -mod=vendor -race -shuffle=on ./internal/protocol/...
+  authz-race:
+    name: authz-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Run current authorization package tests with the race detector
+        run: go test -mod=vendor -race -shuffle=on ./internal/auth/...
+  index-race:
+    name: index-race
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Run current index package tests with the race detector
+        run: go test -mod=vendor -race -shuffle=on ./internal/filter/index/...
+  docs-status-lint:
+    name: docs-status-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Enforce documentation status vocabulary
+        run: go run -mod=vendor ./tools/docsstatus ./docs
+      - name: Enforce claims status
+        run: go run -mod=vendor ./tools/claimslint .
+  metrics-contract:
+    name: metrics-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Run current observability package tests
+        run: go test -mod=vendor ./internal/observability/...
+  deps-audit:
+    name: deps-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Test dependency policy
+        run: go test -mod=vendor ./tools/depsaudit
+      - name: Enforce dependency policy
+        run: go run -mod=vendor ./tools/depsaudit -root .
+      - name: Install pinned vulnerability scanner
+        run: "go install golang.org/x/vuln/cmd/govulncheck@v1.7.0"
+      - name: Run pinned vulnerability scanner
+        env:
+          GOFLAGS: -mod=vendor
+        run: '"$(go env GOPATH)/bin/govulncheck" ./...'
+  trace-check:
+    name: trace-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Run current trace-owning package tests
+        run: go test -mod=vendor ./tools/tracecheck ./internal/observability/... ./internal/transport/...
+      - name: Enforce requirement traceability
+        run: go run -mod=vendor ./tools/tracecheck -root .
+  macos-correctness:
+    name: macos-correctness
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Report runner platform
+        run: go env GOOS GOARCH
+      - name: Bootstrap the exact contributor toolchain
+        run: make bootstrap
+      - name: Run the exact contributor check target
+        run: make check
+      - name: Run the exact contributor race suite
+        run: make test
+  linux-arm64-correctness:
+    name: linux-arm64-correctness
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up pinned Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: "1.26.7"
+          check-latest: false
+          cache: false
+      - name: Report runner platform
+        run: go env GOOS GOARCH
+      - name: Bootstrap the exact contributor toolchain
+        run: make bootstrap
+      - name: Run the exact contributor check target
+        run: make check
+      - name: Run the exact contributor race suite
+        run: make test
