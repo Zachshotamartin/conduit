@@ -3,11 +3,18 @@
   "vendor_tree_digest_algorithm": "sha256-framed-tree-v1",
   "reviews": [
     {
+      "module": "github.com/agnivade/levenshtein",
+      "version": "v1.2.1",
+      "status": "accepted",
+      "review_file": "github.com-agnivade-levenshtein-v1.2.1.md",
+      "vendor_tree_sha256": "sha256:992b61494dc700e30aaace3e3ddd94b0bbef31a3d7e0736d72562d3a66a077f2"
+    },
+    {
       "module": "github.com/vektah/gqlparser/v2",
       "version": "v2.5.36",
       "status": "accepted",
       "review_file": "github.com-vektah-gqlparser-v2-v2.5.36.md",
-      "vendor_tree_sha256": "sha256:4166c3e7213596f09ce262672b93f36e4473dbc60b3b964684af2dcc42a0aa13"
+      "vendor_tree_sha256": "sha256:5dd86c970802423ad4805caff83647f1e07e22e9e728ca3d80fcd1a23f3e72d4"
     },
     {
       "module": "gopkg.in/yaml.v3",
@@ -19,6 +26,12 @@
   ],
   "transitive_disclosures": [
     {
+      "module": "github.com/arbovm/levenshtein",
+      "version": "v0.0.0-20160628152529-48b4e1c0c4d0",
+      "relationship": "upstream-test-only",
+      "review_file": "github.com-agnivade-levenshtein-v1.2.1.md"
+    },
+    {
       "module": "github.com/creack/pty",
       "version": "v1.1.9",
       "relationship": "upstream-test-only",
@@ -29,6 +42,12 @@
       "version": "v1.1.1",
       "relationship": "upstream-test-only",
       "review_file": "github.com-vektah-gqlparser-v2-v2.5.36.md"
+    },
+    {
+      "module": "github.com/dgryski/trifles",
+      "version": "v0.0.0-20230903005119-f50d829f2e54",
+      "relationship": "upstream-test-only",
+      "review_file": "github.com-agnivade-levenshtein-v1.2.1.md"
     },
     {
       "module": "github.com/kr/pretty",

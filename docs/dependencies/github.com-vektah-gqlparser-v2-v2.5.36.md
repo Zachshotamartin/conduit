@@ -1,9 +1,10 @@
 # Dependency review: `github.com/vektah/gqlparser/v2` `v2.5.36`
 
-Review status: accepted for R1.01 on 2026-08-30. This record answers
+Review status: accepted through R1.02 on 2026-08-30. This record answers
 BUILD_PLAN §4.6 and OPERATIONS_TEST_PLAN §5.2; acceptance is limited to
-bounded GraphQL lexing and parsing in `internal/graphql/ast` until the R1.02
-schema-validation corpus is present.
+bounded GraphQL lexing, parsing, and final schema compilation in
+`internal/graphql/ast`. Conduit retains its accumulating October-2021 SDL
+rules, immutable metadata, semantic hashing, operation policy, and executor.
 
 ## Decision
 
@@ -30,14 +31,14 @@ schema-validation corpus is present.
 
 ## Closure, licensing, and confinement
 
-- R1.01 imports only gqlparser's `ast`, `gqlerror`, `lexer`, and `parser`
-  packages. The linked package graph therefore adds only the gqlparser module;
-  its validator-only `github.com/agnivade/levenshtein v1.2.1` requirement and
-  upstream test requirements are not linked into Conduit at this ticket.
-  `go mod graph` nevertheless records gqlparser's exact declared closure:
-  levenshtein, testify, go-spew, go-difflib, kr/pretty, go.yaml.in/yaml/v3,
-  gopkg.in/check.v1, and the already-reviewed gopkg.in/yaml.v3. The Go 1.26.7
-  tidy closure also records kr/text and creack/pty without linking packages.
+- R1.02 imports gqlparser's `ast`, `gqlerror`, `lexer`, `parser`, and
+  `validator` packages. The validator's `core` package makes
+  `github.com/agnivade/levenshtein v1.2.1` reachable for typo suggestions; it
+  has its own accepted review and vendored digest. `go mod graph` also records
+  testify, go-spew, go-difflib, kr/pretty, go.yaml.in/yaml/v3,
+  gopkg.in/check.v1, kr/text, creack/pty, arbovm/levenshtein, and
+  dgryski/trifles as non-reachable upstream test closure. Every retained
+  non-reachable module/version is disclosed in `reviews.json`.
 - gqlparser, levenshtein, testify, kr/pretty, kr/text, and creack/pty carry MIT
   terms; go-spew carries ISC; go-difflib carries BSD-3-Clause; gocheck carries
   BSD-2-Clause; and go.yaml.in/yaml/v3 carries MIT and Apache-2.0 terms. Every
@@ -49,15 +50,24 @@ schema-validation corpus is present.
   held behind opaque Conduit `Schema` and `Operation` types. `tools/depsaudit`
   enforces this package confinement, and `tools/archcheck` enforces the same
   architecture boundary over the repository import graph.
-- The vendored, linked gqlparser subset is 180 KiB on disk and contains 26
+- Conduit carries one reviewed, minimal patch to the vendored v2.5.36 parser.
+  `parseInterfaceTypeExtension` now parses the October-2021
+  `implements` clause and counts it when checking that an extension is
+  nonempty. `parseInputObjectTypeExtension` now parses directives in constant
+  mode, rejecting variables where SDL requires `Const` values. Both defects
+  have checked-in boundary fixtures. No public API, validator rule, executor,
+  or dependency version is changed, and no `replace` directive or undisclosed
+  fork is used. A future gqlparser upgrade must either contain equivalent
+  upstream fixes or reapply and re-review this exact patch.
+- The vendored, linked gqlparser subset is 404 KiB on disk and contains 63
   files. Both that subset and the 2.2 MiB upstream module tree are pure Go:
   no C, assembly, cgo directive, native library, subprocess, or runtime
   service is introduced.
 - `reviews.json` records the deterministic `sha256-framed-tree-v1` digest
-  `sha256:4166c3e7213596f09ce262672b93f36e4473dbc60b3b964684af2dcc42a0aa13`
+  `sha256:5dd86c970802423ad4805caff83647f1e07e22e9e728ca3d80fcd1a23f3e72d4`
   over every sorted vendored path, permission mode, and file body. Any source,
-  grammar fixture, or license change therefore fails the offline dependency
-  audit.
+  local patch, grammar fixture, or license change therefore fails the offline
+  dependency audit.
 - Removal difficulty is moderate. The vendor AST is confined to one package,
   so callers are insulated, but a replacement must preserve source positions,
   GraphQL grammar behavior, the bounded-input corpus, and later R1 execution
@@ -69,10 +79,11 @@ schema-validation corpus is present.
 Every upgrade or replacement runs UNIT-003 under the race detector and the
 checked-in fuzz seed corpus. The suite proves exact byte, token, and
 syntactic-depth boundaries, pre-parse allocation ceilings, ignored-token
-behavior, safe typed errors, and the no-partial-operation invariant. From
-R1.02 onward, the complete SDL/spec-validation and execution corpora are also
-mandatory, especially because upstream v2.5.33 moved its imported spec corpus
-toward the 2023 draft while Conduit's normative contract remains the frozen
-project documentation. The dependency audit, architecture check, vet,
-redaction canaries, docs-status lint, and claims lint remain required beside
-that corpus.
+behavior, safe typed errors, no partial operations or schemas, logical source
+name confinement, all-file diagnostics, immutable snapshots, directive
+semantics, and stable semantic hashes. The complete SDL corpus is mandatory:
+gqlparser is fail-fast, mutates its schema AST during validation, and carries
+post-October-2021 `@defer`/`@oneOf` definitions, so Conduit runs its own frozen,
+accumulating validation before using gqlparser only as the final compiler
+guard. The dependency audit, architecture check, vet, redaction canaries,
+docs-status lint, and claims lint remain required beside that corpus.

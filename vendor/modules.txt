@@ -1,3 +1,6 @@
+# github.com/agnivade/levenshtein v1.2.1
+## explicit; go 1.21
+github.com/agnivade/levenshtein
 # github.com/kr/text v0.2.0
 ## explicit
 # github.com/vektah/gqlparser/v2 v2.5.36
@@ -6,6 +9,9 @@ github.com/vektah/gqlparser/v2/ast
 github.com/vektah/gqlparser/v2/gqlerror
 github.com/vektah/gqlparser/v2/lexer
 github.com/vektah/gqlparser/v2/parser
+github.com/vektah/gqlparser/v2/validator
+github.com/vektah/gqlparser/v2/validator/core
+github.com/vektah/gqlparser/v2/validator/rules
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
